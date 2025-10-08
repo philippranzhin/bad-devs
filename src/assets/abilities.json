@@ -1,0 +1,362 @@
+[
+  {
+    "id": "frontend_debug_master",
+    "name": "Мастер отладки",
+    "description": "Один раз за сессию можете уменьшить сложность frontend задачи на 2",
+    "type": "frontend",
+    "effect": "reduce_complexity",
+    "value": 2,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "frontend_ui_inspiration",
+    "name": "Вдохновение UI",
+    "description": "Один раз за сессию можете увеличить энтузиазм на 3 при решении frontend задач",
+    "type": "frontend",
+    "effect": "bonus_enthusiasm",
+    "value": 3,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "frontend_framework_expert",
+    "name": "Эксперт фреймворков",
+    "description": "Один раз за сессию можете использовать techBase как frontend навык",
+    "type": "frontend",
+    "effect": "skill_conversion",
+    "value": 1,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "frontend_perfect_pixel",
+    "name": "Идеальный пиксель",
+    "description": "Один раз за сессию можете увеличить дедлайн frontend задачи на 1",
+    "type": "frontend",
+    "effect": "extend_deadline",
+    "value": 1,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "frontend_code_review",
+    "name": "Код-ревью",
+    "description": "Один раз за сессию можете получить +2 к frontend навыку от коллеги",
+    "type": "frontend",
+    "effect": "borrow_skill",
+    "value": 2,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "frontend_quick_fix",
+    "name": "Быстрое исправление",
+    "description": "Один раз за сессию можете слить frontend задачу с шансом 60%",
+    "type": "frontend",
+    "effect": "dump_task",
+    "value": 0.6,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "frontend_responsive_master",
+    "name": "Мастер адаптивности",
+    "description": "Один раз за сессию можете решить frontend задачу без траты энтузиазма",
+    "type": "frontend",
+    "effect": "free_enthusiasm",
+    "value": 1,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "frontend_animation_wizard",
+    "name": "Маг анимаций",
+    "description": "Один раз за сессию можете удвоить опыт от frontend задачи",
+    "type": "frontend",
+    "effect": "double_experience",
+    "value": 2,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "frontend_performance_guru",
+    "name": "Гуру производительности",
+    "description": "Один раз за сессию можете увеличить сложность frontend задачи на 1 для получения большего опыта",
+    "type": "frontend",
+    "effect": "increase_complexity",
+    "value": 1,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "frontend_cross_browser",
+    "name": "Кроссбраузерность",
+    "description": "Один раз за сессию можете решить любую frontend задачу как backend",
+    "type": "frontend",
+    "effect": "skill_swap",
+    "value": 1,
+    "targetSkill": "frontend"
+  },
+  {
+    "id": "backend_architecture_master",
+    "name": "Мастер архитектуры",
+    "description": "Один раз за сессию можете уменьшить сложность backend задачи на 2",
+    "type": "backend",
+    "effect": "reduce_complexity",
+    "value": 2,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "backend_api_inspiration",
+    "name": "Вдохновение API",
+    "description": "Один раз за сессию можете увеличить энтузиазм на 3 при решении backend задач",
+    "type": "backend",
+    "effect": "bonus_enthusiasm",
+    "value": 3,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "backend_database_expert",
+    "name": "Эксперт баз данных",
+    "description": "Один раз за сессию можете использовать techBase как backend навык",
+    "type": "backend",
+    "effect": "skill_conversion",
+    "value": 1,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "backend_performance_tuning",
+    "name": "Настройка производительности",
+    "description": "Один раз за сессию можете увеличить дедлайн backend задачи на 1",
+    "type": "backend",
+    "effect": "extend_deadline",
+    "value": 1,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "backend_code_review",
+    "name": "Код-ревью",
+    "description": "Один раз за сессию можете получить +2 к backend навыку от коллеги",
+    "type": "backend",
+    "effect": "borrow_skill",
+    "value": 2,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "backend_quick_fix",
+    "name": "Быстрое исправление",
+    "description": "Один раз за сессию можете слить backend задачу с шансом 60%",
+    "type": "backend",
+    "effect": "dump_task",
+    "value": 0.6,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "backend_microservices",
+    "name": "Микросервисы",
+    "description": "Один раз за сессию можете решить backend задачу без траты энтузиазма",
+    "type": "backend",
+    "effect": "free_enthusiasm",
+    "value": 1,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "backend_scalability_guru",
+    "name": "Гуру масштабируемости",
+    "description": "Один раз за сессию можете удвоить опыт от backend задачи",
+    "type": "backend",
+    "effect": "double_experience",
+    "value": 2,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "backend_security_expert",
+    "name": "Эксперт безопасности",
+    "description": "Один раз за сессию можете увеличить сложность backend задачи на 1 для получения большего опыта",
+    "type": "backend",
+    "effect": "increase_complexity",
+    "value": 1,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "backend_devops_integration",
+    "name": "Интеграция с DevOps",
+    "description": "Один раз за сессию можете решить любую backend задачу как frontend",
+    "type": "backend",
+    "effect": "skill_swap",
+    "value": 1,
+    "targetSkill": "backend"
+  },
+  {
+    "id": "management_leadership_master",
+    "name": "Мастер лидерства",
+    "description": "Один раз за сессию можете уменьшить сложность management задачи на 2",
+    "type": "management",
+    "effect": "reduce_complexity",
+    "value": 2,
+    "targetSkill": "management"
+  },
+  {
+    "id": "management_team_inspiration",
+    "name": "Вдохновение команды",
+    "description": "Один раз за сессию можете увеличить энтузиазм на 3 при решении management задач",
+    "type": "management",
+    "effect": "bonus_enthusiasm",
+    "value": 3,
+    "targetSkill": "management"
+  },
+  {
+    "id": "management_process_expert",
+    "name": "Эксперт процессов",
+    "description": "Один раз за сессию можете использовать techBase как management навык",
+    "type": "management",
+    "effect": "skill_conversion",
+    "value": 1,
+    "targetSkill": "management"
+  },
+  {
+    "id": "management_deadline_flexibility",
+    "name": "Гибкость дедлайнов",
+    "description": "Один раз за сессию можете увеличить дедлайн management задачи на 1",
+    "type": "management",
+    "effect": "extend_deadline",
+    "value": 1,
+    "targetSkill": "management"
+  },
+  {
+    "id": "management_mentoring",
+    "name": "Менторство",
+    "description": "Один раз за сессию можете получить +2 к management навыку от коллеги",
+    "type": "management",
+    "effect": "borrow_skill",
+    "value": 2,
+    "targetSkill": "management"
+  },
+  {
+    "id": "management_crisis_handling",
+    "name": "Управление кризисами",
+    "description": "Один раз за сессию можете слить management задачу с шансом 60%",
+    "type": "management",
+    "effect": "dump_task",
+    "value": 0.6,
+    "targetSkill": "management"
+  },
+  {
+    "id": "management_agile_master",
+    "name": "Мастер Agile",
+    "description": "Один раз за сессию можете решить management задачу без траты энтузиазма",
+    "type": "management",
+    "effect": "free_enthusiasm",
+    "value": 1,
+    "targetSkill": "management"
+  },
+  {
+    "id": "management_strategic_vision",
+    "name": "Стратегическое видение",
+    "description": "Один раз за сессию можете удвоить опыт от management задачи",
+    "type": "management",
+    "effect": "double_experience",
+    "value": 2,
+    "targetSkill": "management"
+  },
+  {
+    "id": "management_resource_optimization",
+    "name": "Оптимизация ресурсов",
+    "description": "Один раз за сессию можете увеличить сложность management задачи на 1 для получения большего опыта",
+    "type": "management",
+    "effect": "increase_complexity",
+    "value": 1,
+    "targetSkill": "management"
+  },
+  {
+    "id": "management_cross_functional",
+    "name": "Кроссфункциональность",
+    "description": "Один раз за сессию можете решить любую management задачу как frontend",
+    "type": "management",
+    "effect": "skill_swap",
+    "value": 1,
+    "targetSkill": "management"
+  },
+  {
+    "id": "fullstack_versatility_master",
+    "name": "Мастер универсальности",
+    "description": "Один раз за сессию можете уменьшить сложность любой задачи на 1",
+    "type": "fullstack",
+    "effect": "reduce_complexity",
+    "value": 1,
+    "targetSkill": "any"
+  },
+  {
+    "id": "fullstack_innovation_inspiration",
+    "name": "Вдохновение инноваций",
+    "description": "Один раз за сессию можете увеличить энтузиазм на 2 при решении любой задачи",
+    "type": "fullstack",
+    "effect": "bonus_enthusiasm",
+    "value": 2,
+    "targetSkill": "any"
+  },
+  {
+    "id": "fullstack_tech_polyglot",
+    "name": "Технологический полиглот",
+    "description": "Один раз за сессию можете использовать любой навык как любой другой",
+    "type": "fullstack",
+    "effect": "skill_conversion",
+    "value": 1,
+    "targetSkill": "any"
+  },
+  {
+    "id": "fullstack_time_management",
+    "name": "Управление временем",
+    "description": "Один раз за сессию можете увеличить дедлайн любой задачи на 1",
+    "type": "fullstack",
+    "effect": "extend_deadline",
+    "value": 1,
+    "targetSkill": "any"
+  },
+  {
+    "id": "fullstack_team_synergy",
+    "name": "Синергия команды",
+    "description": "Один раз за сессию можете получить +1 к любому навыку от коллеги",
+    "type": "fullstack",
+    "effect": "borrow_skill",
+    "value": 1,
+    "targetSkill": "any"
+  },
+  {
+    "id": "fullstack_problem_solver",
+    "name": "Решатель проблем",
+    "description": "Один раз за сессию можете слить любую задачу с шансом 50%",
+    "type": "fullstack",
+    "effect": "dump_task",
+    "value": 0.5,
+    "targetSkill": "any"
+  },
+  {
+    "id": "fullstack_efficiency_expert",
+    "name": "Эксперт эффективности",
+    "description": "Один раз за сессию можете решить любую задачу без траты энтузиазма",
+    "type": "fullstack",
+    "effect": "free_enthusiasm",
+    "value": 1,
+    "targetSkill": "any"
+  },
+  {
+    "id": "fullstack_learning_accelerator",
+    "name": "Ускоритель обучения",
+    "description": "Один раз за сессию можете удвоить опыт от любой задачи",
+    "type": "fullstack",
+    "effect": "double_experience",
+    "value": 2,
+    "targetSkill": "any"
+  },
+  {
+    "id": "fullstack_challenge_seeker",
+    "name": "Искатель вызовов",
+    "description": "Один раз за сессию можете увеличить сложность любой задачи на 1 для получения большего опыта",
+    "type": "fullstack",
+    "effect": "increase_complexity",
+    "value": 1,
+    "targetSkill": "any"
+  },
+  {
+    "id": "fullstack_adaptability",
+    "name": "Адаптивность",
+    "description": "Один раз за сессию можете изменить тип навыка задачи на любой другой",
+    "type": "fullstack",
+    "effect": "skill_swap",
+    "value": 1,
+    "targetSkill": "any"
+  }
+]
