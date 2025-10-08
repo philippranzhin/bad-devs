@@ -1,25 +1,38 @@
 {
-  "name": "bad-devs-game",
+  "name": "bad-devs",
   "version": "1.0.0",
-  "description": "Card-based RPG game simulator",
-  "main": "dist/index.js",
+  "description": "Bad Devs - Card-Based RPG Game with Multiple Client Interfaces",
+  "main": "index.js",
   "scripts": {
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "build": "tsc",
-    "dev": "ts-node src/index.ts"
+    "test": "npm run test:engine",
+    "test:engine": "cd GameEngine && npm test",
+    "build": "npm run build:engine",
+    "build:engine": "cd GameEngine && npm run build",
+    "dev": "npm run dev:engine",
+    "dev:engine": "cd GameEngine && npm run dev",
+    "install:all": "npm install && cd GameEngine && npm install",
+    "clean": "npm run clean:engine",
+    "clean:engine": "cd GameEngine && npm run clean"
   },
+  "keywords": [
+    "rpg",
+    "card-game",
+    "typescript",
+    "game-engine",
+    "bad-devs"
+  ],
+  "author": "Philipp Ranzhin",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/philippranzhin/bad-devs.git"
+  },
+  "workspaces": [
+    "GameEngine",
+    "clients/*"
+  ],
   "devDependencies": {
-    "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
-    "jest": "^29.5.0",
-    "ts-jest": "^29.1.0",
-    "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": ["**/__tests__/**/*.test.ts"]
   }
 }

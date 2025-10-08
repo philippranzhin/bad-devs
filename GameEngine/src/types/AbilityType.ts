@@ -1,6 +1,6 @@
-import { SkillType, PlayerSpecialization } from './SkillType';
+import { PlayerSpecialization, SkillType } from './SkillType';
 
-export type AbilityEffect = 
+export type AbilityEffect =
   | 'reduce_complexity'      // Уменьшить сложность
   | 'bonus_enthusiasm'       // Бонус энтузиазма
   | 'skill_conversion'       // Конвертация навыков
