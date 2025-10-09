@@ -1,37 +1,37 @@
 // Core Models
-export { GameSession } from './src/models/GameSession';
-export { Player } from './src/models/Player';
-export { Project } from './src/models/Project';
-export { Task } from './src/models/Task';
-export { GameRound } from './src/models/GameRound';
-export { TaskDistribution } from './src/models/TaskDistribution';
-export { GameSettings } from './src/models/GameSettings';
+export { GameRound } from './models/GameRound';
+export { GameSession } from './models/GameSession';
+export { GameSettings } from './models/GameSettings';
+export { Player } from './models/Player';
+export { Project } from './models/Project';
+export { Task } from './models/Task';
+export { TaskDistribution } from './models/TaskDistribution';
 
 // Services
-export { TaskSolver } from './src/services/TaskSolver';
-export { TaskGenerator } from './src/services/TaskGenerator';
-export { AbilityGenerator } from './src/services/AbilityGenerator';
-export { AbilityService } from './src/services/AbilityService';
+export { AbilityGenerator } from './services/AbilityGenerator';
+export { AbilityService } from './services/AbilityService';
+export { TaskGenerator } from './services/TaskGenerator';
+export { TaskSolver } from './services/TaskSolver';
 
 // Player Implementations
-export { AIPlayer } from './src/players/AIPlayer';
-export { HumanPlayer } from './src/players/HumanPlayer';
-export { AITaskDistributor } from './src/players/AITaskDistributor';
-export { HumanTaskDistributor } from './src/players/HumanTaskDistributor';
+export { AIPlayer } from './players/AIPlayer';
+export { AITaskDistributor } from './players/AITaskDistributor';
+export { HumanPlayer } from './players/HumanPlayer';
+export { HumanTaskDistributor } from './players/HumanTaskDistributor';
 
 // Types and Interfaces
-export * from './src/types/SkillType';
-export * from './src/types/AbilityType';
-export * from './src/interfaces/PlayerInterface';
+export * from './interfaces/PlayerInterface';
+export * from './types/AbilityType';
+export * from './types/SkillType';
 
 // Re-export interfaces from models
-export type { RoundResult } from './src/models/GameSession';
-export type { ProjectRequirements, ProjectProgress, ProjectRewards } from './src/models/Project';
-export type { TaskAssignment, TaskDistributionChoice, TaskDistributionInterface } from './src/models/TaskDistribution';
-export type { DefaultSkillSets, AbilitySettings } from './src/models/GameSettings';
+export type { RoundResult } from './models/GameSession';
+export type { AbilitySettings, DefaultSkillSets } from './models/GameSettings';
+export type { ProjectProgress, ProjectRequirements, ProjectRewards } from './models/Project';
+export type { TaskAssignment, TaskDistributionChoice, TaskDistributionInterface } from './models/TaskDistribution';
 
 // Re-export interfaces from services
-export type { Investment } from './src/services/TaskSolver';
-export type { TaskTemplate, TaskGenerationConfig } from './src/services/TaskGenerator';
-export type { AbilityGenerationConfig } from './src/services/AbilityGenerator';
-export type { AbilityResult } from './src/services/AbilityService';
+export type { AbilityGenerationConfig } from './services/AbilityGenerator';
+export type { AbilityResult } from './services/AbilityService';
+export type { TaskGenerationConfig, TaskTemplate } from './services/TaskGenerator';
+export type { Investment } from './services/TaskSolver';

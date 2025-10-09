@@ -1,4 +1,5 @@
 import { PlayerAction, PlayerActionRequest, PlayerInterface } from '../interfaces/PlayerInterface';
+import { AITaskDistributor } from '../players/AITaskDistributor';
 import { TaskGenerator } from '../services/TaskGenerator';
 import { TaskSolver } from '../services/TaskSolver';
 import { GameRound } from './GameRound';
@@ -99,7 +100,6 @@ export class GameSession {
     return playerInterfaces.map(player => {
       // Для простоты используем AI распределителей
       // В реальной игре здесь была бы логика определения типа игрока
-      const { AITaskDistributor } = require('../players/AITaskDistributor');
       return new AITaskDistributor(player);
     });
   }

@@ -6,6 +6,7 @@
   "scripts": {
     "test": "npm run test:engine",
     "test:engine": "cd GameEngine && npm test",
+    "test:exports": "ts-node test-exports.ts",
     "build": "npm run build:engine",
     "build:engine": "cd GameEngine && npm run build",
     "dev": "npm run dev:engine",
@@ -33,6 +34,7 @@
   ],
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
   }
 }
