@@ -17,7 +17,8 @@ export class HumanTaskDistributor implements TaskDistributionInterface {
   async selectTaskAssignment(
     availableTasks: Task[],
     currentPlayerId: string,
-    allPlayers: PlayerInterface[]
+    allPlayers: PlayerInterface[],
+    taskDistribution?: any
   ): Promise<TaskDistributionChoice> {
     return new Promise((resolve) => {
       this.assignmentResolver = resolve;

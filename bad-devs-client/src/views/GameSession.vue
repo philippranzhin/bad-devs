@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import type { Task, PlayerActionRequest } from 'bad-devs-gameengine'
@@ -11,23 +11,60 @@ const gameStore = useGameStore()
 // Ref для модалки профиля
 const profileModal = ref<InstanceType<typeof ProfileModal> | null>(null)
 
-const currentPhase = ref<'task-distribution'>('task-distribution')
-const currentTasks = ref<Task[]>([])
-const distributedTasks = ref<Map<string, string>>(new Map()) // taskId -> playerId
+// Состояние UI
 const isLoading = ref(false)
-const currentPlayerIndex = ref(0)
-const allPlayers = ref<any[]>([])
-const isWaitingForPlayer = ref(false)
-const tasksPerPlayer = ref<Map<string, number>>(new Map()) // playerId -> количество выбранных задач
-const currentTaskIndex = ref(0) // Индекс текущей задачи для распределения
-const isProcessingAI = ref(false) // Флаг для показа AI действий
-const aiResult = ref<{playerName: string, taskName: string} | null>(null) // Результат AI действия
-const draggedTask = ref<Task | null>(null) // Задача, которую перетаскивают
+const isProcessingAI = ref(false)
+const aiThinking = ref<{playerName: string} | null>(null)
+const aiActorName = ref<string | null>(null)
+const aiPreviewRecipientName = ref<string | null>(null)
+const aiPreviewTaskName = ref<string | null>(null)
+const aiResult = ref<{playerName: string, taskName: string} | null>(null)
+const draggedTask = ref<Task | null>(null)
+// Снимок всех задач раунда на момент инициализации распределения
+const allDistributionTasks = ref<Task[]>([])
 
+// Данные для фазы решения задач
+const playerInvestments = ref<Map<string, Map<string, any>>>(new Map()) // playerId -> taskId -> investment
+const isWaitingForHumanAction = ref(false)
+
+// Computed properties из GameEngine
 const gameSession = computed(() => gameStore.gameSession)
 const currentRound = computed(() => gameStore.currentRound)
 const projectProgress = computed(() => gameStore.projectProgress)
 const isProjectCompleted = computed(() => gameStore.isProjectCompleted)
+
+// Получаем данные из GameEngine
+const currentPhase = computed(() => {
+  const s: any = gameSession.value
+  if (!s) return 'task-distribution'
+  if (typeof s.getCurrentPhase !== 'function') return 'task-distribution'
+  return s.getCurrentPhase()
+})
+
+const currentTasks = computed(() => {
+  if (!gameSession.value) return []
+  return gameSession.value.getCurrentRoundTasks()
+})
+
+const distributionState = computed(() => {
+  if (!gameSession.value) return {
+    currentPlayerId: null,
+    availableTasks: [],
+    assignedTasks: [],
+    isComplete: false
+  }
+  return gameSession.value.getDistributionState()
+})
+
+const allPlayers = computed(() => {
+  if (!gameSession.value) return []
+  return gameSession.value.playerInterfaces
+})
+
+const humanPlayerTasks = computed(() => {
+  if (!gameSession.value || !gameStore.humanPlayerInterface) return []
+  return gameSession.value.getPlayerTasks(gameStore.humanPlayerInterface.id)
+})
 
 onMounted(async () => {
   if (!gameSession.value) {
@@ -35,322 +72,183 @@ onMounted(async () => {
     return
   }
 
-  // Инициализируем игроков - человек всегда первый
-  allPlayers.value = [
-    gameStore.humanPlayerInterface!,
-    ...gameStore.aiPlayers!
-  ]
+  // Инициализируем распределение задач в GameEngine
+  gameSession.value.initializeTaskDistribution()
 
-  await startRound()
+  // Если сейчас ход AI — автоматически обрабатываем его, пока не дойдем до человека или завершения
+  await autoAdvanceAITurns()
+
+  // Зафиксируем полный список задач раунда до начала распределения (он уменьшается в availableTasks)
+  allDistributionTasks.value = gameSession.value.getCurrentRoundTasks()
+
+  // Инициализируем фазу решения задач если нужно
+  if (currentPhase.value === 'task-solving') {
+    await initializeTaskSolvingPhase()
+  }
 })
 
-async function startRound() {
+// Следим за сменой текущего игрока и автоматически ходим за ИИ
+watch(
+  () => ({ id: distributionState.value.currentPlayerId, complete: distributionState.value.isComplete }),
+  async ({ id, complete }) => {
+    if (!gameSession.value || !gameStore.humanPlayerInterface) return
+    if (complete) {
+      // Переход к фазе решения
+      gameSession.value.completeTaskDistribution()
+      await initializeTaskSolvingPhase()
+      return
+    }
+    if (id && id !== gameStore.humanPlayerInterface.id) {
+      await autoAdvanceAITurns()
+    }
+  }
+)
+
+// Инициализация фазы решения задач
+async function initializeTaskSolvingPhase() {
+  if (!gameSession.value || !gameStore.humanPlayerInterface) return
+
+  // Инициализируем инвестиции для всех задач игрока
+  const tasks = humanPlayerTasks.value
+  tasks.forEach(task => {
+    if (!playerInvestments.value.has(gameStore.humanPlayerInterface!.id)) {
+      playerInvestments.value.set(gameStore.humanPlayerInterface!.id, new Map())
+    }
+
+    const taskInvestments = playerInvestments.value.get(gameStore.humanPlayerInterface!.id)!
+    if (!taskInvestments.has(task.id)) {
+      taskInvestments.set(task.id, {
+        frontend: 0,
+        backend: 0,
+        management: 0,
+        enthusiasm: 0
+      })
+    }
+  })
+
+  isWaitingForHumanAction.value = true
+}
+
+// Назначение задачи игроку
+async function assignTaskToPlayer(task: Task, playerId: string) {
   if (!gameSession.value) return
 
-  isLoading.value = true
-  currentPhase.value = 'task-distribution'
-  currentPlayerIndex.value = 0
-  currentTaskIndex.value = 0
-  distributedTasks.value.clear()
-  tasksPerPlayer.value.clear()
-  isWaitingForPlayer.value = false
-  isProcessingAI.value = false
-  aiResult.value = null
-
   try {
-    // Generate tasks for current round
-    currentTasks.value = generateTasksForRound()
+    gameSession.value.assignTask(task.id, playerId, gameStore.humanPlayerInterface!.id)
 
-    // Инициализируем счетчики задач для каждого игрока
-    allPlayers.value.forEach(player => {
-      tasksPerPlayer.value.set(player.id, 0)
-    })
-
-    // Start with first player (человек)
-    await nextPlayerTurn()
-
+    // Проверяем, завершено ли распределение
+    if (distributionState.value.isComplete) {
+      gameSession.value.completeTaskDistribution()
+      await initializeTaskSolvingPhase()
+    } else {
+      // После хода человека, если дальше очередь ИИ — автопродвижение
+      await autoAdvanceAITurns()
+    }
   } catch (error) {
-    console.error('Error starting round:', error)
-  } finally {
-    isLoading.value = false
+    console.error('Error assigning task:', error)
+    alert('Ошибка при назначении задачи: ' + (error as Error).message)
   }
 }
 
-// Следующий ход игрока
-async function nextPlayerTurn() {
-  // Проверяем, все ли задачи распределены
-  if (currentTaskIndex.value >= currentTasks.value.length) {
-    console.log('Распределение завершено!')
+// Обработка действий игрока при распределении задач
+async function onTaskDistributed(task: Task, assignedTo: string) {
+  await assignTaskToPlayer(task, assignedTo)
+}
+
+// Обработка двойного клика по задаче
+async function onTaskDoubleClick(task: Task) {
+  if (!gameStore.humanPlayerInterface) return
+
+  const currentPlayerId = distributionState.value.currentPlayerId
+  if (currentPlayerId !== gameStore.humanPlayerInterface.id) {
+    alert('Не ваш ход!')
     return
   }
 
-  const currentPlayer = allPlayers.value[currentPlayerIndex.value]
+  await assignTaskToPlayer(task, gameStore.humanPlayerInterface.id)
+}
 
-  if (currentPlayer === gameStore.humanPlayerInterface) {
-    // Ход человека - ждем его действий
-    isWaitingForPlayer.value = true
-  } else {
-    // Ход AI - автоматически выбираем задачу
-    await aiPlayerTurn(currentPlayer)
+// Автопроход ходов AI, пока не очередь человека или пока распределение не завершено
+async function autoAdvanceAITurns() {
+  if (!gameSession.value || !gameStore.humanPlayerInterface) return
+
+  // Защита от гонок
+  if (isProcessingAI.value) return
+
+  try {
+    isProcessingAI.value = true
+    while (true) {
+      const state = gameSession.value.getDistributionState()
+      if (state.isComplete) break
+      const currentId = state.currentPlayerId
+      if (!currentId) break
+      if (currentId === gameStore.humanPlayerInterface.id) break
+
+      // 1) Предпросмотр: получаем задачу (и потенциального получателя) ДО показа текста, чтобы сразу отобразить название задачи
+      const currentPlayer = allPlayers.value.find(p => p.id === currentId)
+      aiActorName.value = currentPlayer?.name || 'Бот'
+      aiResult.value = null
+      aiPreviewRecipientName.value = null
+      aiPreviewTaskName.value = null
+
+      const preview = await (gameSession.value as any).previewCurrentAIChoice()
+      const sourceForPreview = allDistributionTasks.value.length > 0 ? allDistributionTasks.value : currentTasks.value
+      const previewTaskName = preview ? (sourceForPreview.find(t => t.id === preview.taskId)?.name || 'Задача') : null
+      // По требованию показываем только название задачи, без получателя на этапе "распределяет"
+      aiPreviewTaskName.value = previewTaskName
+      // Получателя пока не показываем
+      // const previewPlayerName = preview ? (allPlayers.value.find(p => p.id === preview.assignedTo)?.name || preview.assignedTo) : null
+      // aiPreviewRecipientName.value = previewPlayerName || null
+
+      // 2) Сообщение: ИмяБота распределяет задачу ТайтлЗадачи
+      aiThinking.value = { playerName: aiActorName.value }
+      const preDelay = 600 + Math.floor(Math.random() * 800)
+      await new Promise(r => setTimeout(r, preDelay))
+
+      // Дополнительная короткая пауза перед фактическим назначением
+      await new Promise(r => setTimeout(r, 600))
+
+      // Запоминаем состояние до хода
+      const before = gameSession.value.getDistributionState().assignedTasks.length
+
+      // 3) Назначение задачи
+      await gameSession.value.processCurrentAITurn()
+
+      // 4) Показ результата: какая задача и кому назначена
+      const afterState = gameSession.value.getDistributionState()
+      const after = afterState.assignedTasks.length
+      if (after > before) {
+        const last = afterState.assignedTasks[after - 1]
+        const playerName = allPlayers.value.find(p => p.id === last.assignedTo)?.name || last.assignedTo
+        const source = allDistributionTasks.value.length > 0 ? allDistributionTasks.value : currentTasks.value
+        const taskName = source.find(t => t.id === last.taskId)?.name || 'Задача'
+        aiThinking.value = null
+        aiPreviewRecipientName.value = null
+        aiPreviewTaskName.value = null
+        aiResult.value = { playerName, taskName }
+        // Пауза чтобы пользователь увидел результат распределения
+        await new Promise(r => setTimeout(r, 1000))
+      }
+    }
+
+    // Если после автопрохода распределение завершено — стартуем фазу решения
+    if (gameSession.value.getDistributionState().isComplete) {
+      gameSession.value.completeTaskDistribution()
+      await initializeTaskSolvingPhase()
+    }
+  } finally {
+    isProcessingAI.value = false
+    // Очистим индикаторы чуть позже
+    setTimeout(() => { aiThinking.value = null; aiPreviewRecipientName.value = null; aiResult.value = null; aiActorName.value = null }, 500)
   }
 }
 
 // Ход AI игрока
-async function aiPlayerTurn(player: any) {
-  const currentTask = currentTasks.value[currentTaskIndex.value]
-
-  if (currentTask) {
-    // Первая часть: показываем "распределяет"
-    isProcessingAI.value = true
-    aiResult.value = null
-
-    // Задержка для показа процесса
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // Умная логика выбора игрока для задачи
-    const targetPlayerId = selectBestPlayerForTask(currentTask, player)
-
-    // Выполняем распределение
-    distributedTasks.value.set(currentTask.id, targetPlayerId)
-
-    // Обновляем счетчик задач для игрока
-    const playerTasks = tasksPerPlayer.value.get(targetPlayerId) || 0
-    tasksPerPlayer.value.set(targetPlayerId, playerTasks + 1)
-
-    // Вторая часть: показываем результат
-    isProcessingAI.value = false
-    const targetPlayer = allPlayers.value.find(p => p.id === targetPlayerId)
-    aiResult.value = {
-      playerName: targetPlayer?.name || 'Unknown',
-      taskName: currentTask.name
-    }
-
-    // Задержка для показа результата
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // Очищаем результат и переходим к следующей задаче
-    aiResult.value = null
-    currentTaskIndex.value++
-    currentPlayerIndex.value = (currentPlayerIndex.value + 1) % allPlayers.value.length
-
-    await nextPlayerTurn()
-  }
-}
-
 // Умная логика выбора игрока для задачи
-function selectBestPlayerForTask(task: Task, currentAIPlayer: any): string {
-  const playerSpecialization = getPlayerSpecialization(currentAIPlayer)
-  const maxTasks = gameStore.gameSettings?.actionsPerTurn || 5
-
-  // Проверяем, может ли AI игрок взять еще задачи
-  const currentAITasks = tasksPerPlayer.value.get(currentAIPlayer.id) || 0
-  const canAITakeMore = currentAITasks < maxTasks
-
-  // Если задача подходит AI игроку по специализации И у него есть место - берем себе
-  if (task.requiredSkill === playerSpecialization && canAITakeMore) {
-    return currentAIPlayer.id
-  }
-
-  // Если задача не подходит или у AI нет места - ищем кому её дать
-  const availablePlayers = allPlayers.value.filter(p => {
-    const playerTasks = tasksPerPlayer.value.get(p.id) || 0
-    return playerTasks < maxTasks
-  })
-
-  if (availablePlayers.length === 0) {
-    // Если все заполнены, но AI может взять - берем себе
-    if (canAITakeMore) {
-      return currentAIPlayer.id
-    }
-    // Если даже AI заполнен - берем себе (это не должно происходить в нормальной игре)
-    return currentAIPlayer.id
-  }
-
-  // Находим игрока, которому эта задача будет максимально невыгодна
-  let worstPlayer = availablePlayers[0]
-  let worstScore = calculateTaskDisadvantage(task, availablePlayers[0])
-
-  for (const player of availablePlayers) {
-    const disadvantage = calculateTaskDisadvantage(task, player)
-    if (disadvantage > worstScore) {
-      worstScore = disadvantage
-      worstPlayer = player
-    }
-  }
-
-  return worstPlayer.id
-}
-
-// Рассчитывает насколько невыгодна задача для игрока
-function calculateTaskDisadvantage(task: Task, player: any): number {
-  const playerSpecialization = getPlayerSpecialization(player)
-
-  // Базовый штраф за несоответствие специализации
-  let disadvantage = 0
-
-  if (task.requiredSkill !== playerSpecialization) {
-    disadvantage += 10 // Штраф за несоответствие специализации
-  }
-
-  // Дополнительный штраф за сложность задачи
-  disadvantage += task.complexity * 2
-
-  // Штраф за срочность (дедлайн)
-  if (task.deadline <= 2) {
-    disadvantage += 5 // Срочные задачи еще хуже
-  }
-
-  // Бонус за то, что игрок уже перегружен
-  const playerTasks = tasksPerPlayer.value.get(player.id) || 0
-  const maxTasks = gameStore.gameSettings?.actionsPerTurn || 5
-  const overloadRatio = playerTasks / maxTasks
-  disadvantage += overloadRatio * 15 // Чем больше перегружен, тем хуже
-
-  // Если это человек - небольшой штраф (AI предпочитает назначать другим AI)
-  if (player === gameStore.humanPlayerInterface) {
-    disadvantage += 5 // Уменьшили штраф с 20 до 5
-  }
-
-  // Если это другой AI - небольшой бонус (AI предпочитает назначать другим AI)
-  if (player !== gameStore.humanPlayerInterface) {
-    disadvantage -= 3 // Небольшой бонус для других AI
-  }
-
-  return disadvantage
-}
-
-function generateTasksForRound(): Task[] {
-  const actionsPerTurn = gameStore.gameSettings?.actionsPerTurn || 5
-  const playerCount = allPlayers.value.length
-  const totalTasks = actionsPerTurn * playerCount
-
-  // Генерируем больше задач для выбора
-  const taskTemplates = [
-    {
-      name: 'Исправить баг с авторизацией',
-      description: 'Пользователи не могут войти в систему на мобильных устройствах',
-      requiredSkill: 'frontend',
-      complexity: 3,
-      deadline: 2,
-      experienceReward: 50,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'frontend'
-    },
-    {
-      name: 'Оптимизировать API запросы',
-      description: 'Добавить кэширование и оптимизировать производительность API',
-      requiredSkill: 'backend',
-      complexity: 4,
-      deadline: 3,
-      experienceReward: 75,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'backend'
-    },
-    {
-      name: 'Планирование спринта',
-      description: 'Организовать задачи на следующий спринт и распределить нагрузку',
-      requiredSkill: 'management',
-      complexity: 2,
-      deadline: 1,
-      experienceReward: 40,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'management'
-    },
-    {
-      name: 'Написать unit тесты',
-      description: 'Покрыть тестами критически важные функции системы',
-      requiredSkill: 'backend',
-      complexity: 3,
-      deadline: 2,
-      experienceReward: 60,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'backend'
-    },
-    {
-      name: 'Улучшить UX интерфейса',
-      description: 'Переработать пользовательский интерфейс для лучшего опыта',
-      requiredSkill: 'frontend',
-      complexity: 4,
-      deadline: 3,
-      experienceReward: 80,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'frontend'
-    },
-    {
-      name: 'Провести код-ревью',
-      description: 'Проверить качество кода и предложить улучшения',
-      requiredSkill: 'management',
-      complexity: 2,
-      deadline: 1,
-      experienceReward: 35,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'management'
-    },
-    {
-      name: 'Настроить CI/CD',
-      description: 'Автоматизировать процесс развертывания приложения',
-      requiredSkill: 'backend',
-      complexity: 5,
-      deadline: 4,
-      experienceReward: 100,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'backend'
-    },
-    {
-      name: 'Создать мобильную версию',
-      description: 'Адаптировать интерфейс для мобильных устройств',
-      requiredSkill: 'frontend',
-      complexity: 4,
-      deadline: 3,
-      experienceReward: 90,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'frontend'
-    },
-    {
-      name: 'Оптимизировать базу данных',
-      description: 'Улучшить производительность запросов к БД',
-      requiredSkill: 'backend',
-      complexity: 4,
-      deadline: 3,
-      experienceReward: 85,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'backend'
-    },
-    {
-      name: 'Провести ретроспективу',
-      description: 'Проанализировать работу команды и найти точки роста',
-      requiredSkill: 'management',
-      complexity: 3,
-      deadline: 2,
-      experienceReward: 55,
-      contributesToCommonGoal: true,
-      commonGoalSkill: 'management'
-    }
-  ]
-
-  // Генерируем задачи на основе шаблонов
-  const tasks: Task[] = []
-  for (let i = 0; i < totalTasks; i++) {
-    const template = taskTemplates[i % taskTemplates.length]
-    tasks.push({
-      id: `task-${Date.now()}-${i}`,
-      name: `${template.name} ${i + 1}`,
-      description: template.description,
-      requiredSkill: template.requiredSkill,
-      complexity: template.complexity,
-      deadline: template.deadline,
-      experienceReward: template.experienceReward,
-      contributesToCommonGoal: template.contributesToCommonGoal,
-      commonGoalSkill: template.commonGoalSkill
-    })
-  }
-
-  return tasks
-}
-
 // Drag and Drop функции
 function onDragStart(event: DragEvent, task: Task) {
-  if (!isWaitingForPlayer.value) return
+  const currentPlayerId = distributionState.value.currentPlayerId
+  if (currentPlayerId !== gameStore.humanPlayerInterface?.id) return
 
   draggedTask.value = task
   if (event.dataTransfer) {
@@ -377,14 +275,16 @@ function onDragLeave(event: DragEvent) {
 function onDrop(event: DragEvent, playerId: string) {
   event.preventDefault()
 
-  if (!draggedTask.value || !isWaitingForPlayer.value) return
+  if (!draggedTask.value) return
+
+  const currentPlayerId = distributionState.value.currentPlayerId
+  if (currentPlayerId !== gameStore.humanPlayerInterface?.id) return
 
   // Проверяем, может ли игрок взять еще задачи
-  const playerTasks = tasksPerPlayer.value.get(playerId) || 0
+  const playerTaskCount = distributionState.value.assignedTasks.filter(a => a.assignedTo === playerId).length
   const maxTasks = gameStore.gameSettings?.actionsPerTurn || 5
 
-  if (playerTasks >= maxTasks) {
-    // Игрок уже заполнен, не можем назначить задачу
+  if (playerTaskCount >= maxTasks) {
     alert(`Игрок уже получил максимальное количество задач (${maxTasks})`)
     return
   }
@@ -393,49 +293,11 @@ function onDrop(event: DragEvent, playerId: string) {
   const target = event.currentTarget as HTMLElement
   target.classList.remove('player-column--drag-over')
 
-  // Назначаем задачу игроку
-  distributedTasks.value.set(draggedTask.value.id, playerId)
+  // Назначаем задачу
+  assignTaskToPlayer(draggedTask.value, playerId)
 
-  // Обновляем счетчик задач для игрока
-  tasksPerPlayer.value.set(playerId, playerTasks + 1)
-
-  // Переходим к следующей задаче и игроку
-  currentTaskIndex.value++
-  currentPlayerIndex.value = (currentPlayerIndex.value + 1) % allPlayers.value.length
-  isWaitingForPlayer.value = false
-
+  // Очищаем перетаскиваемую задачу
   draggedTask.value = null
-
-  nextPlayerTurn()
-}
-
-// Двойной клик для назначения себе
-function onTaskDoubleClick(task: Task) {
-  if (!isWaitingForPlayer.value) return
-
-  const humanPlayerId = gameStore.humanPlayerInterface!.id
-
-  // Проверяем, может ли человек взять еще задачи
-  const playerTasks = tasksPerPlayer.value.get(humanPlayerId) || 0
-  const maxTasks = gameStore.gameSettings?.actionsPerTurn || 5
-
-  if (playerTasks >= maxTasks) {
-    // Человек уже заполнен, не можем назначить задачу
-    alert(`Вы уже получили максимальное количество задач (${maxTasks})`)
-    return
-  }
-
-  distributedTasks.value.set(task.id, humanPlayerId)
-
-  // Обновляем счетчик задач для игрока
-  tasksPerPlayer.value.set(humanPlayerId, playerTasks + 1)
-
-  // Переходим к следующей задаче и игроку
-  currentTaskIndex.value++
-  currentPlayerIndex.value = (currentPlayerIndex.value + 1) % allPlayers.value.length
-  isWaitingForPlayer.value = false
-
-  nextPlayerTurn()
 }
 
 function getPhaseTitle(): string {
@@ -467,11 +329,82 @@ function showPlayerProfile(player: any) {
   profileModal.value?.show(playerData)
 }
 
+// Функции для работы с инвестициями
+function updateInvestment(playerId: string, taskId: string, skill: string, value: number) {
+  const playerInvestmentsMap = playerInvestments.value.get(playerId)
+  if (playerInvestmentsMap) {
+    const investment = playerInvestmentsMap.get(taskId)
+    if (investment) {
+      investment[skill] = value
+    }
+  }
+}
+
+function getInvestment(playerId: string, taskId: string, skill: string): number {
+  const playerInvestmentsMap = playerInvestments.value.get(playerId)
+  if (playerInvestmentsMap) {
+    const investment = playerInvestmentsMap.get(taskId)
+    return investment?.[skill] || 0
+  }
+  return 0
+}
+
+function calculateSuccessProbability(task: Task, investment: any): number {
+  if (!gameSession.value || !gameStore.humanPlayerInterface) return 0
+
+  try {
+    return gameSession.value.calculateTaskSuccessProbability(task, gameStore.humanPlayerInterface.id, investment)
+  } catch (error) {
+    console.error('Error calculating success probability:', error)
+    return 0
+  }
+}
+
+async function submitHumanActions() {
+  if (!gameSession.value || !gameStore.humanPlayerInterface) return
+
+  try {
+    const actions: PlayerActionRequest[] = []
+    const taskInvestments = playerInvestments.value.get(gameStore.humanPlayerInterface.id)
+
+    if (taskInvestments) {
+      for (const [taskId, investment] of taskInvestments) {
+        // Проверяем, что есть инвестиции в задачу
+        const totalInvestment = Object.values(investment).reduce((sum, val) => sum + (val || 0), 0)
+        if (totalInvestment > 0) {
+          actions.push({
+            playerId: gameStore.humanPlayerInterface.id,
+            taskId: taskId,
+            investment: investment
+          })
+        }
+      }
+    }
+
+    if (actions.length > 0) {
+      await gameSession.value.submitPlayerActions(gameStore.humanPlayerInterface.id, actions)
+    }
+
+    isWaitingForHumanAction.value = false
+    console.log('Actions submitted successfully')
+  } catch (error) {
+    console.error('Error submitting actions:', error)
+    alert('Ошибка при отправке действий: ' + (error as Error).message)
+  }
+}
+
 function getPlayerSpecialization(player: any): string {
   if (player === gameStore.humanPlayerInterface) {
     return gameStore.humanPlayer?.specialization || 'unknown'
   }
   return player.player?.specialization || 'unknown'
+}
+
+function getPlayerPersonality(player: any): string {
+  if (player === gameStore.humanPlayerInterface) {
+    return 'Человек'
+  }
+  return player.personalityName || 'AI'
 }
 
 function getProjectProgressPercentage(): number {
@@ -494,14 +427,13 @@ function getSpecializationName(specialization: string): string {
   return names[specialization] || specialization
 }
 
-// Получить текущего игрока для распределения задач
-const currentPlayer = computed(() => {
-  return allPlayers.value[currentPlayerIndex.value]
-})
-
 // Получить текущую задачу для распределения
 const currentTask = computed(() => {
-  return currentTasks.value[currentTaskIndex.value]
+  // Используем полный список задач раунда, но исключаем уже назначенные
+  const assignedTaskIds = new Set(distributionState.value.assignedTasks.map(a => a.taskId))
+  const source = allDistributionTasks.value.length > 0 ? allDistributionTasks.value : currentTasks.value
+  const unassignedTasks = source.filter(task => !assignedTaskIds.has(task.id))
+  return unassignedTasks.length > 0 ? unassignedTasks[0] : null
 })
 
 // Получить распределенные задачи
@@ -512,10 +444,11 @@ const assignedTasks = computed(() => {
     assigned.set(player.id, [])
   })
 
-  distributedTasks.value.forEach((playerId, taskId) => {
-    const task = currentTasks.value.find(t => t.id === taskId)
+  distributionState.value.assignedTasks.forEach(assignment => {
+    const source = allDistributionTasks.value.length > 0 ? allDistributionTasks.value : currentTasks.value
+    const task = source.find(t => t.id === assignment.taskId)
     if (task) {
-      assigned.get(playerId)?.push(task)
+      assigned.get(assignment.assignedTo)?.push(task)
     }
   })
 
@@ -524,30 +457,34 @@ const assignedTasks = computed(() => {
 
 // Проверить, завершено ли распределение
 const isDistributionComplete = computed(() => {
-  return currentTaskIndex.value >= currentTasks.value.length
+  return distributionState.value.isComplete
 })
 
 // Получить информацию о текущем ходе
 const currentTurnInfo = computed(() => {
   if (aiResult.value) {
-    const currentAIPlayer = allPlayers.value[currentPlayerIndex.value]
-    const targetPlayer = allPlayers.value.find(p => p.name === aiResult.value?.playerName)
-
-    if (targetPlayer === currentAIPlayer) {
-      return `${aiResult.value.playerName} назначил задачу "${aiResult.value.taskName}" себе!`
-    } else {
-      return `${currentAIPlayer.name} назначил задачу "${aiResult.value.taskName}" игроку ${aiResult.value.playerName}!`
-    }
-  } else if (isProcessingAI.value) {
-    const player = allPlayers.value[currentPlayerIndex.value]
-    return `${player.name} распределяет задачу...`
-  } else if (isWaitingForPlayer.value) {
-    return `Ваш ход! Перетащите задачу к игроку или дважды кликните для назначения себе`
-  } else if (isDistributionComplete.value) {
-    return `Распределение завершено!`
-  } else {
-    return `Ожидание...`
+    return `${aiActorName.value || 'Бот'} распределил задачу ${aiResult.value.taskName} игроку ${aiResult.value.playerName}`
   }
+
+  if (isProcessingAI.value) {
+    // Если есть предпросмотр — показываем полную фразу
+    if (aiActorName.value && aiPreviewTaskName.value) {
+      return `${aiActorName.value} распределяет задачу ${aiPreviewTaskName.value}${aiPreviewRecipientName.value ? ' игроку ' + aiPreviewRecipientName.value : ''}`
+    }
+    // Иначе общее сообщение
+    return `${aiActorName.value || 'Бот'} распределяет задачу...`
+  }
+
+  const currentPlayerId = distributionState.value.currentPlayerId
+  if (currentPlayerId === gameStore.humanPlayerInterface?.id) {
+    return 'Ваш ход! Выберите кому назначить задачу'
+  }
+
+  if (isDistributionComplete.value) {
+    return 'Распределение завершено!'
+  }
+
+  return 'Ожидание хода игрока...'
 })
 </script>
 
@@ -557,8 +494,8 @@ const currentTurnInfo = computed(() => {
     <div class="page-header">
       <div class="page-header-content">
         <div class="page-title-section">
-          <h1 class="page-title">Распределение задач</h1>
-          <p class="page-description">Раунд {{ currentRound }} из {{ gameSession?.settings.rounds }}</p>
+          <h1 class="page-title">{{ currentPhase === 'task-distribution' ? 'Распределение задач' : 'Решение задач' }}</h1>
+          <p class="page-description">{{ currentPhase === 'task-distribution' ? 'Распределите задачи между игроками по очереди' : 'Инвестируйте свои ресурсы в решение назначенных задач' }} - Раунд {{ currentRound }} из {{ gameSession?.settings.rounds }}</p>
         </div>
         <div class="page-actions">
           <div class="project-info">
@@ -576,20 +513,22 @@ const currentTurnInfo = computed(() => {
 
     <!-- Main content -->
     <div class="page-content">
-      <!-- Current turn info -->
-      <div class="turn-status">
+      <!-- Task Distribution Phase -->
+      <div v-if="currentPhase === 'task-distribution'">
+        <!-- Current turn info -->
+        <div class="turn-status">
         <div class="turn-info">
           <div class="turn-indicator">
             <div v-if="isProcessingAI" class="spinner"></div>
             <div v-else-if="aiResult" class="success-icon">✓</div>
-            <div v-else-if="isWaitingForPlayer" class="user-icon">👤</div>
+            <div v-else-if="distributionState.currentPlayerId === gameStore.humanPlayerInterface?.id" class="user-icon">👤</div>
             <div v-else class="wait-icon">⏳</div>
           </div>
           <div class="turn-text">
             <h3>{{ currentTurnInfo }}</h3>
             <div class="turn-details">
-              <span class="task-counter">Задача {{ currentTaskIndex + 1 }} из {{ currentTasks.length }}</span>
-              <span class="player-name">Текущий игрок: {{ allPlayers[currentPlayerIndex]?.name }}</span>
+              <span class="task-counter">Задача {{ distributionState.assignedTasks.length + 1 }} из {{ allDistributionTasks.length || currentTasks.length }}</span>
+              <span class="player-name">Текущий игрок: {{ allPlayers.find(p => p.id === distributionState.currentPlayerId)?.name || 'Ожидание...' }}</span>
             </div>
           </div>
         </div>
@@ -601,13 +540,13 @@ const currentTurnInfo = computed(() => {
         <div v-if="currentTask && !isDistributionComplete" class="current-task-section">
           <div class="section-header">
             <h2>Текущая задача</h2>
-            <div class="task-number">#{{ currentTaskIndex + 1 }}</div>
+            <div class="task-number">#{{ distributionState.assignedTasks.length + 1 }}</div>
           </div>
 
           <div
             class="task-card"
-            :class="{ 'task-card--draggable': isWaitingForPlayer }"
-            :draggable="isWaitingForPlayer"
+            :class="{ 'task-card--draggable': distributionState.currentPlayerId === gameStore.humanPlayerInterface?.id }"
+            :draggable="distributionState.currentPlayerId === gameStore.humanPlayerInterface?.id"
             @dragstart="onDragStart($event, currentTask)"
             @dblclick="onTaskDoubleClick(currentTask)"
           >
@@ -641,7 +580,7 @@ const currentTurnInfo = computed(() => {
 
 
             <!-- Player instructions -->
-            <div v-if="isWaitingForPlayer" class="player-instructions">
+            <div v-if="distributionState.currentPlayerId === gameStore.humanPlayerInterface?.id" class="player-instructions">
               <div class="instruction-text">
                 <strong>Ваш ход!</strong> Перетащите задачу к игроку или дважды кликните для назначения себе
               </div>
@@ -654,7 +593,7 @@ const currentTurnInfo = computed(() => {
           <div class="section-header">
             <h2>Распределенные задачи</h2>
             <div class="distribution-progress">
-              {{ currentTaskIndex }} / {{ currentTasks.length }} распределено
+              {{ distributionState.assignedTasks.length }} / {{ currentTasks.length }} распределено
             </div>
           </div>
 
@@ -664,9 +603,9 @@ const currentTurnInfo = computed(() => {
               :key="player.id"
               class="player-column"
               :class="{
-                'player-column--current': player === currentPlayer && isWaitingForPlayer,
+                'player-column--current': player.id === distributionState.currentPlayerId,
                 'player-column--ai': player !== gameStore.humanPlayerInterface,
-                'player-column--filled': (tasksPerPlayer.get(player.id) || 0) >= (gameStore.gameSettings?.actionsPerTurn || 5)
+                'player-column--filled': (assignedTasks.get(player.id) || []).length >= (gameStore.gameSettings?.actionsPerTurn || 5)
               }"
               @dragover="onDragOver"
               @dragleave="onDragLeave"
@@ -681,13 +620,16 @@ const currentTurnInfo = computed(() => {
                     <span class="player-type">
                       {{ player === gameStore.humanPlayerInterface ? 'Вы' : 'AI' }}
                     </span>
+                    <span class="player-personality" :class="`personality--${player.personality || 'unknown'}`">
+                      {{ getPlayerPersonality(player) }}
+                    </span>
                     <span class="player-specialization">
                       {{ getSpecializationName(getPlayerSpecialization(player)) }}
                     </span>
                   </div>
                 </div>
                 <div class="task-count">
-                  {{ tasksPerPlayer.get(player.id) || 0 }} / {{ gameStore.gameSettings?.actionsPerTurn || 5 }}
+                  {{ (assignedTasks.get(player.id) || []).length }} / {{ gameStore.gameSettings?.actionsPerTurn || 5 }}
                 </div>
               </div>
 
@@ -708,6 +650,148 @@ const currentTurnInfo = computed(() => {
                 <div v-if="(assignedTasks.get(player.id) || []).length === 0" class="empty-state">
                   <div class="empty-icon">📋</div>
                   <div class="empty-text">Нет задач</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <!-- Task Solving Phase -->
+      <div v-if="currentPhase === 'task-solving'" class="task-solving-phase">
+        <div class="phase-header">
+          <h2>Решение задач</h2>
+          <p>Инвестируйте свои ресурсы в решение назначенных задач</p>
+        </div>
+
+        <div class="solving-layout">
+          <!-- Left column: Human player tasks -->
+          <div class="human-tasks-section">
+            <h3>Мои задачи</h3>
+            <div class="tasks-list">
+              <div
+                v-for="task in humanPlayerTasks"
+                :key="task.id"
+                class="task-card"
+              >
+                <div class="task-header">
+                  <h4>{{ task.name }}</h4>
+                  <div class="task-meta">
+                    <span class="task-skill">{{ getSpecializationName(task.requiredSkill) }}</span>
+                    <span class="task-complexity">Сложность: {{ task.complexity }}</span>
+                    <span class="task-reward">{{ task.experienceReward }} XP</span>
+                  </div>
+                </div>
+
+                <div class="investment-section">
+                  <h5>Инвестиции</h5>
+
+                  <!-- Skills investment -->
+                  <div class="skills-investment">
+                    <div class="skill-row">
+                      <label>Frontend:</label>
+                      <input
+                        type="range"
+                        min="0"
+                        :max="gameStore.humanPlayer?.skills.frontend || 0"
+                        :value="getInvestment(gameStore.humanPlayerInterface!.id, task.id, 'frontend')"
+                        @input="updateInvestment(gameStore.humanPlayerInterface!.id, task.id, 'frontend', parseInt(($event.target as HTMLInputElement).value))"
+                      />
+                      <span>{{ getInvestment(gameStore.humanPlayerInterface!.id, task.id, 'frontend') }}</span>
+                    </div>
+
+                    <div class="skill-row">
+                      <label>Backend:</label>
+                      <input
+                        type="range"
+                        min="0"
+                        :max="gameStore.humanPlayer?.skills.backend || 0"
+                        :value="getInvestment(gameStore.humanPlayerInterface!.id, task.id, 'backend')"
+                        @input="updateInvestment(gameStore.humanPlayerInterface!.id, task.id, 'backend', parseInt(($event.target as HTMLInputElement).value))"
+                      />
+                      <span>{{ getInvestment(gameStore.humanPlayerInterface!.id, task.id, 'backend') }}</span>
+                    </div>
+
+                    <div class="skill-row">
+                      <label>Management:</label>
+                      <input
+                        type="range"
+                        min="0"
+                        :max="gameStore.humanPlayer?.skills.management || 0"
+                        :value="getInvestment(gameStore.humanPlayerInterface!.id, task.id, 'management')"
+                        @input="updateInvestment(gameStore.humanPlayerInterface!.id, task.id, 'management', parseInt(($event.target as HTMLInputElement).value))"
+                      />
+                      <span>{{ getInvestment(gameStore.humanPlayerInterface!.id, task.id, 'management') }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Enthusiasm investment -->
+                  <div class="enthusiasm-investment">
+                    <label>Энтузиазм:</label>
+                    <input
+                      type="range"
+                      min="0"
+                      :max="gameStore.humanPlayer?.enthusiasm || 0"
+                      :value="getInvestment(gameStore.humanPlayerInterface!.id, task.id, 'enthusiasm')"
+                      @input="updateInvestment(gameStore.humanPlayerInterface!.id, task.id, 'enthusiasm', parseInt(($event.target as HTMLInputElement).value))"
+                    />
+                    <span>{{ getInvestment(gameStore.humanPlayerInterface!.id, task.id, 'enthusiasm') }}</span>
+                  </div>
+
+                  <!-- Success probability -->
+                  <div class="success-probability">
+                    <label>Вероятность успеха:</label>
+                    <div class="probability-bar">
+                      <div
+                        class="probability-fill"
+                        :style="{ width: `${calculateSuccessProbability(task, playerInvestments.get(gameStore.humanPlayerInterface!.id)?.get(task.id) || {}) * 100}%` }"
+                      ></div>
+                    </div>
+                    <span>{{ Math.round(calculateSuccessProbability(task, playerInvestments.get(gameStore.humanPlayerInterface!.id)?.get(task.id) || {}) * 100) }}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button
+                class="button"
+                @click="submitHumanActions"
+                :disabled="!isWaitingForHumanAction"
+              >
+                Отправить действия
+              </button>
+            </div>
+          </div>
+
+          <!-- Right column: Team status -->
+          <div class="team-status-section">
+            <h3>Статус команды</h3>
+            <div class="players-status">
+              <div
+                v-for="player in allPlayers"
+                :key="player.id"
+                class="player-status"
+              >
+                <div class="player-header">
+                  <div class="player-name clickable" @click="showPlayerProfile(player)">
+                    {{ player.name }}
+                  </div>
+                  <div class="player-type">
+                    {{ player === gameStore.humanPlayerInterface ? 'Вы' : 'AI' }}
+                  </div>
+                </div>
+
+                <div class="player-tasks">
+                  <div
+                    v-for="task in currentTasks.filter(t => distributedTasks.get(t.id) === player.id)"
+                    :key="task.id"
+                    class="player-task"
+                  >
+                    <span class="task-name">{{ task.name }}</span>
+                    <span class="task-status">В процессе</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1289,5 +1373,292 @@ const currentTurnInfo = computed(() => {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Task Solving Phase Styles */
+.task-solving-phase {
+  padding: 24px;
+}
+
+.phase-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.phase-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.phase-header p {
+  margin: 0;
+  font-size: 16px;
+  color: var(--color-text-secondary);
+}
+
+.solving-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.human-tasks-section h3,
+.team-status-section h3 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.task-card {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.task-header h4 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.task-meta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.task-skill {
+  background-color: var(--color-accent);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.task-complexity,
+.task-reward {
+  color: var(--color-text-secondary);
+}
+
+.investment-section h5 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.skills-investment {
+  margin-bottom: 20px;
+}
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.skill-row label {
+  min-width: 80px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.skill-row input[type="range"] {
+  flex: 1;
+  height: 6px;
+  background: var(--color-border-muted);
+  border-radius: 3px;
+  outline: none;
+}
+
+.skill-row input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--color-accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.skill-row span {
+  min-width: 30px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.enthusiasm-investment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: 8px;
+}
+
+.enthusiasm-investment label {
+  min-width: 80px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.enthusiasm-investment input[type="range"] {
+  flex: 1;
+  height: 6px;
+  background: var(--color-border-muted);
+  border-radius: 3px;
+  outline: none;
+}
+
+.enthusiasm-investment input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--color-accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.enthusiasm-investment span {
+  min-width: 30px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.success-probability {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: 8px;
+}
+
+.success-probability label {
+  min-width: 120px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.probability-bar {
+  flex: 1;
+  height: 8px;
+  background-color: var(--color-border-muted);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.probability-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #dc3545 0%, #ffc107 50%, #28a745 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.success-probability span {
+  min-width: 40px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.actions {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.team-status-section {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.player-status {
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.player-status .player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.player-status .player-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.player-status .player-type {
+  font-size: 12px;
+  background-color: var(--color-text-tertiary);
+  color: var(--color-bg-primary);
+  padding: 4px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.player-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.player-task {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: var(--color-bg-primary);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.task-name {
+  color: var(--color-text-primary);
+}
+
+.task-status {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.player-personality {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.personality--kind {
+  color: #059669;
+  background-color: #d1fae5;
+}
+
+.personality--evil {
+  color: #dc2626;
+  background-color: #fee2e2;
+}
+
+.personality--unknown {
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-tertiary);
 }
 </style>

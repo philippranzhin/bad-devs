@@ -20,7 +20,8 @@ export interface TaskDistributionInterface {
   selectTaskAssignment(
     availableTasks: Task[],
     currentPlayerId: string,
-    allPlayers: PlayerInterface[]
+    allPlayers: PlayerInterface[],
+    taskDistribution?: TaskDistribution // Добавляем опциональный параметр для доступа к информации о назначениях
   ): Promise<TaskDistributionChoice>;
 }
 
@@ -42,10 +43,12 @@ export class TaskDistribution {
   }
 
   public getCurrentPlayerId(playerInterfaces: PlayerInterface[]): string | null {
-    if (this.isCompleted || this.currentPlayerIndex >= playerInterfaces.length) {
+    if (this.isCompleted || playerInterfaces.length === 0) {
       return null;
     }
-    return playerInterfaces[this.currentPlayerIndex].id;
+    // Используем модуль для циклического распределения
+    const actualIndex = this.currentPlayerIndex % playerInterfaces.length;
+    return playerInterfaces[actualIndex].id;
   }
 
   public getAvailableTasks(): Task[] {

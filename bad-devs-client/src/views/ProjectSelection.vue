@@ -80,17 +80,15 @@ const mockProjects = [
 ]
 
 onMounted(() => {
-  // Initialize projects - используем простые объекты вместо полных классов
-  projects.value = mockProjects.map(projectData => ({
-    id: projectData.id,
-    name: projectData.name,
-    description: projectData.description,
-    requiredLevel: projectData.requiredLevel,
-    requirements: projectData.requirements,
-    rewards: projectData.rewards,
-    currentProgress: { frontend: 0, backend: 0, management: 0 },
-    isCompleted: false
-  } as any))
+  // Инициализируем реальные Project из GameEngine
+  projects.value = mockProjects.map(p => new Project({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    requiredLevel: p.requiredLevel,
+    requirements: p.requirements,
+    rewards: p.rewards
+  }))
 })
 
 function selectProject(project: any) {
@@ -109,28 +107,14 @@ async function startGame(project: any) {
     // Create AI players
     const aiPlayers = createAIPlayers()
 
-    // Create simple game session object
-    const gameSession = {
+    // Создаем настоящую сессию GameEngine
+    const gameSession = new GameSession({
       id: `session-${Date.now()}`,
-      project: project,
-      settings: gameStore.gameSettings,
-      maxPlayers: 4,
-      currentRound: 1,
-      isActive: true,
-      playerInterfaces: [gameStore.humanPlayerInterface!, ...aiPlayers],
-      players: [gameStore.humanPlayer!, ...aiPlayers.map(p => p.player)],
-      playerEnthusiasm: new Map(),
-      executeRound: async () => {
-        // Mock round execution
-        return {
-          roundNumber: 1,
-          playerActions: [],
-          projectProgress: { frontend: 0, backend: 0, management: 0 },
-          isProjectCompleted: false,
-          nextRoundTasks: []
-        }
-      }
-    } as any
+      project: project as Project,
+      players: [gameStore.humanPlayerInterface!, ...aiPlayers],
+      settings: gameStore.gameSettings!,
+      maxPlayers: 4
+    })
 
     // Store in game store
     gameStore.setCurrentProject(project)
@@ -151,6 +135,7 @@ async function startGame(project: any) {
 
 function createAIPlayers(): any[] {
   const aiNames = ['Алексей', 'Мария', 'Дмитрий']
+  const personalities = ['kind', 'evil'] // Добавляем личности
 
   // Получаем специализацию человека, чтобы избежать дублирования
   const humanSpecialization = gameStore.humanPlayer?.specialization || 'frontend'
@@ -165,10 +150,11 @@ function createAIPlayers(): any[] {
   return aiNames.map((name, index) => {
     // Берем специализацию по кругу, чтобы обеспечить равное распределение
     const specialization = shuffledSpecializations[index % shuffledSpecializations.length]
+    const personality = personalities[Math.floor(Math.random() * personalities.length)]
 
-    const player = {
+    const enginePlayer = new Player({
       name,
-      specialization,
+      specialization: specialization as any,
       skills: {
         frontend: specialization === 'frontend' ? 4 : 1,
         backend: specialization === 'backend' ? 4 : 1,
@@ -181,16 +167,16 @@ function createAIPlayers(): any[] {
       experience: 0,
       money: 0,
       abilities: []
-    }
+    })
 
+    // Wrap with engine AIPlayer interface so GameSession can extract original Player
+    const aiPlayer = new AIPlayer(enginePlayer)
+
+    // Добавляем информацию о личности для отображения
     return {
-      player,
-      id: name,
-      name,
-      selectActions: async () => [],
-      onRoundStart: () => {},
-      onRoundEnd: () => {},
-      onProjectProgress: () => {}
+      ...aiPlayer,
+      personality,
+      personalityName: personality === 'kind' ? 'Добрый' : 'Злой'
     }
   })
 }

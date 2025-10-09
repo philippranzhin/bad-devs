@@ -2,6 +2,7 @@ import { PlayerAction, PlayerActionRequest, PlayerInterface } from '../interface
 import { AITaskDistributor } from '../players/AITaskDistributor';
 import { TaskGenerator } from '../services/TaskGenerator';
 import { TaskSolver } from '../services/TaskSolver';
+import { BotPersonality } from '../types/BotPersonality';
 import { GameRound } from './GameRound';
 import { GameSettings } from './GameSettings';
 import { Player } from './Player';
@@ -32,6 +33,7 @@ export class GameSession {
   private taskGenerator: TaskGenerator;
   private playerEnthusiasm: Map<string, number> = new Map();
   private taskDistributors: TaskDistributionInterface[] = [];
+  private currentTaskDistribution: TaskDistribution | null = null;
 
   constructor(config: {
     id: string;
@@ -95,12 +97,18 @@ export class GameSession {
   }
 
   private createTaskDistributors(playerInterfaces: PlayerInterface[]): TaskDistributionInterface[] {
-    // Пока что создаем простых AI распределителей для всех игроков
-    // В будущем можно будет определять тип по интерфейсу игрока
+    // Создаем распределители с случайными личностями для AI игроков
+    const personalities: BotPersonality[] = ['kind', 'evil'];
+
     return playerInterfaces.map(player => {
-      // Для простоты используем AI распределителей
-      // В реальной игре здесь была бы логика определения типа игрока
-      return new AITaskDistributor(player);
+      // Для AI игроков создаем распределители с случайной личностью
+      if ('player' in player) {
+        const randomPersonality = personalities[Math.floor(Math.random() * personalities.length)];
+        return new AITaskDistributor(player, randomPersonality);
+      } else {
+        // Для Human игроков используем добрую личность по умолчанию
+        return new AITaskDistributor(player, 'kind');
+      }
     });
   }
 
@@ -164,6 +172,9 @@ export class GameSession {
       this.settings.actionsPerTurn
     );
 
+    // Сохраняем текущее распределение для клиента
+    this.currentTaskDistribution = distribution;
+
     // Выполняем распределение по очереди
     while (!distribution.isDistributionComplete(this.playerInterfaces)) {
       const currentPlayerId = distribution.getCurrentPlayerId(this.playerInterfaces);
@@ -182,7 +193,8 @@ export class GameSession {
       const choice = await distributor.selectTaskAssignment(
         availableTasks,
         currentPlayerId,
-        this.playerInterfaces
+        this.playerInterfaces,
+        this.currentTaskDistribution
       );
 
       // Назначаем задачу
@@ -223,7 +235,7 @@ export class GameSession {
       const currentEnthusiasm = this.playerEnthusiasm.get(player.id) || 0;
 
       // Получаем только задачи этого игрока
-      const playerTasks = this.getPlayerTasks(player.id, round);
+      const playerTasks = this.getPlayerTasksForRound(player.id, round);
 
       const playerActions = await player.selectActions(
         playerTasks, // Только задачи этого игрока
@@ -236,8 +248,8 @@ export class GameSession {
     return allActions;
   }
 
-  // Получение задач конкретного игрока
-  private getPlayerTasks(playerId: string, round: GameRound): Task[] {
+  // Получение задач конкретного игрока для раунда
+  private getPlayerTasksForRound(playerId: string, round: GameRound): Task[] {
     // Пока что возвращаем все задачи раунда
     // В будущем здесь будет логика фильтрации по назначенным задачам
     return round.tasks;
@@ -373,5 +385,246 @@ export class GameSession {
 
   public endSession(): void {
     this.isActive = false;
+  }
+
+  // 🎮 Методы для управления фазами игры (для клиента)
+
+  // Получение текущей фазы игры
+  public getCurrentPhase(): 'task-distribution' | 'task-solving' | 'round-complete' {
+    // Если нет активного распределения - фаза распределения
+    if (!this.currentTaskDistribution) {
+      return 'task-distribution';
+    }
+
+    // Если распределение не завершено - фаза распределения
+    if (!this.currentTaskDistribution.isCompleted) {
+      return 'task-distribution';
+    }
+
+    // Если есть активный раунд но не все действия выполнены - фаза решения
+    if (this.currentRoundObj && this.currentRoundObj.actions.length < this.getTotalPossibleActions()) {
+      return 'task-solving';
+    }
+
+    return 'round-complete';
+  }
+
+  // Получение задач для текущего раунда
+  public getCurrentRoundTasks(): Task[] {
+    if (this.currentTaskDistribution) {
+      return this.currentTaskDistribution.getAvailableTasks();
+    }
+
+    // Генерируем задачи для нового раунда
+    const taskPool = this.taskGenerator.generateTasksForRound(
+      this.currentRound,
+      this.playerInterfaces.length
+    );
+    return taskPool;
+  }
+
+  // Получение задач, назначенных конкретному игроку
+  public getPlayerTasks(playerId: string): Task[] {
+    if (this.currentTaskDistribution) {
+      return this.currentTaskDistribution.getPlayerTasks(playerId);
+    }
+    return [];
+  }
+
+  // Расчет вероятности успеха для задачи
+  public calculateTaskSuccessProbability(task: Task, playerId: string, investment: any): number {
+    const player = this.players.find(p => p.name === playerId);
+    if (!player) {
+      throw new Error(`Player ${playerId} not found`);
+    }
+
+    const taskSolver = new TaskSolver(this.settings);
+    return taskSolver.calculateSuccessProbability(task, player, investment);
+  }
+
+  // Отправка действий игрока
+  public async submitPlayerActions(playerId: string, actions: PlayerActionRequest[]): Promise<void> {
+    if (!this.currentRoundObj) {
+      throw new Error('No active round');
+    }
+
+    // Валидация действий
+    this.validatePlayerActions(playerId, actions);
+
+    // Выполняем действия
+    const results = this.executePlayerActions(actions);
+
+    // Добавляем результаты в раунд
+    results.forEach(action => {
+      this.currentRoundObj!.addPlayerAction(action);
+    });
+  }
+
+  // Валидация действий игрока
+  private validatePlayerActions(playerId: string, actions: PlayerActionRequest[]): void {
+    if (!this.currentRoundObj) return;
+
+    const playerActions = this.currentRoundObj.getPlayerActions(playerId);
+    const remainingActions = this.currentRoundObj.getRemainingActions(playerId);
+
+    if (actions.length > remainingActions) {
+      throw new Error(`Player ${playerId} can only perform ${remainingActions} more actions`);
+    }
+
+    // Проверяем, что все задачи существуют
+    actions.forEach(action => {
+      const task = this.currentRoundObj!.tasks.find(t => t.id === action.taskId);
+      if (!task) {
+        throw new Error(`Task ${action.taskId} not found`);
+      }
+    });
+  }
+
+  // Получение текущего энтузиазма игрока
+  public getPlayerEnthusiasm(playerId: string): number {
+    return this.playerEnthusiasm.get(playerId) || 0;
+  }
+
+  // Получение информации о текущем состоянии распределения
+  public getDistributionState(): {
+    currentPlayerId: string | null;
+    availableTasks: Task[];
+    assignedTasks: Array<{taskId: string, assignedTo: string, assignedBy: string}>;
+    isComplete: boolean;
+  } {
+    if (!this.currentTaskDistribution) {
+      return {
+        currentPlayerId: null,
+        availableTasks: [],
+        assignedTasks: [],
+        isComplete: false
+      };
+    }
+
+    return {
+      currentPlayerId: this.currentTaskDistribution.getCurrentPlayerId(this.playerInterfaces),
+      availableTasks: this.currentTaskDistribution.getAvailableTasks(),
+      assignedTasks: this.currentTaskDistribution.assignments,
+      isComplete: this.currentTaskDistribution.isCompleted
+    };
+  }
+
+  // Назначение задачи игроку
+  public assignTask(taskId: string, assignedTo: string, assignedBy: string): void {
+    if (!this.currentTaskDistribution) {
+      throw new Error('No active task distribution');
+    }
+
+    this.currentTaskDistribution.assignTask(taskId, assignedTo, assignedBy);
+  }
+
+  // Выполнить ход текущего AI-игрока (для клиента)
+  public async processCurrentAITurn(): Promise<void> {
+    if (!this.currentTaskDistribution) {
+      throw new Error('No active task distribution');
+    }
+
+    const currentPlayerId = this.currentTaskDistribution.getCurrentPlayerId(this.playerInterfaces);
+    if (!currentPlayerId) return;
+
+    const availableTasks = this.currentTaskDistribution.getAvailableTasks();
+    if (availableTasks.length === 0) return;
+
+    const distributor = this.taskDistributors.find(d => d.id === currentPlayerId);
+    if (!distributor) {
+      throw new Error(`No task distributor found for player ${currentPlayerId}`);
+    }
+
+    const choice = await distributor.selectTaskAssignment(
+      availableTasks,
+      currentPlayerId,
+      this.playerInterfaces,
+      this.currentTaskDistribution
+    );
+
+    this.currentTaskDistribution.assignTask(choice.taskId, choice.assignedTo, currentPlayerId);
+
+    if (this.currentTaskDistribution.isDistributionComplete(this.playerInterfaces)) {
+      this.currentTaskDistribution.completeDistribution();
+    }
+  }
+
+  // Предпросмотр выбора текущего AI без назначения (для клиентской анимации)
+  public async previewCurrentAIChoice(): Promise<{ taskId: string; assignedTo: string; assignedBy: string } | null> {
+    if (!this.currentTaskDistribution) {
+      throw new Error('No active task distribution');
+    }
+
+    const currentPlayerId = this.currentTaskDistribution.getCurrentPlayerId(this.playerInterfaces);
+    if (!currentPlayerId) return null;
+
+    const availableTasks = this.currentTaskDistribution.getAvailableTasks();
+    if (availableTasks.length === 0) return null;
+
+    const distributor = this.taskDistributors.find(d => d.id === currentPlayerId);
+    if (!distributor) {
+      throw new Error(`No task distributor found for player ${currentPlayerId}`);
+    }
+
+    const choice = await distributor.selectTaskAssignment(
+      availableTasks,
+      currentPlayerId,
+      this.playerInterfaces,
+      this.currentTaskDistribution
+    );
+
+    return { taskId: choice.taskId, assignedTo: choice.assignedTo, assignedBy: currentPlayerId };
+  }
+
+  // Завершение распределения задач
+  public completeTaskDistribution(): void {
+    if (!this.currentTaskDistribution) {
+      throw new Error('No active task distribution');
+    }
+
+    this.currentTaskDistribution.completeDistribution();
+
+    // Создаем новый раунд с распределенными задачами
+    this.createRoundFromDistribution();
+  }
+
+  // Создание раунда из распределения
+  private createRoundFromDistribution(): void {
+    if (!this.currentTaskDistribution) return;
+
+    const distributedTasks = this.currentTaskDistribution.taskPool.filter(task =>
+      this.currentTaskDistribution!.assignments.some(a => a.taskId === task.id)
+    );
+
+    this.currentRoundObj = new GameRound(
+      this.currentRound,
+      distributedTasks,
+      this.settings.actionsPerTurn
+    );
+  }
+
+  // Получение общего количества возможных действий
+  private getTotalPossibleActions(): number {
+    return this.playerInterfaces.length * this.settings.actionsPerTurn;
+  }
+
+  // Инициализация распределения задач для клиента
+  public initializeTaskDistribution(): void {
+    if (this.currentTaskDistribution) {
+      return; // Уже инициализировано
+    }
+
+    // Генерируем пул задач для раунда
+    const taskPool = this.taskGenerator.generateTasksForRound(
+      this.currentRound,
+      this.playerInterfaces.length
+    );
+
+    // Создаем фазу распределения
+    this.currentTaskDistribution = new TaskDistribution(
+      this.currentRound,
+      taskPool,
+      this.settings.actionsPerTurn
+    );
   }
 }
