@@ -3,9 +3,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import type { Task, PlayerActionRequest } from 'bad-devs-gameengine'
+import ProfileModal from '@/components/ProfileModal.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
+
+// Ref для модалки профиля
+const profileModal = ref<InstanceType<typeof ProfileModal> | null>(null)
 
 const currentPhase = ref<'task-distribution'>('task-distribution')
 const currentTasks = ref<Task[]>([])
@@ -93,7 +97,6 @@ async function nextPlayerTurn() {
 
 // Ход AI игрока
 async function aiPlayerTurn(player: any) {
-  // AI выбирает текущую задачу и назначает её себе
   const currentTask = currentTasks.value[currentTaskIndex.value]
 
   if (currentTask) {
@@ -104,17 +107,21 @@ async function aiPlayerTurn(player: any) {
     // Задержка для показа процесса
     await new Promise(resolve => setTimeout(resolve, 1000))
 
+    // Умная логика выбора игрока для задачи
+    const targetPlayerId = selectBestPlayerForTask(currentTask, player)
+
     // Выполняем распределение
-    distributedTasks.value.set(currentTask.id, player.id)
+    distributedTasks.value.set(currentTask.id, targetPlayerId)
 
     // Обновляем счетчик задач для игрока
-    const playerTasks = tasksPerPlayer.value.get(player.id) || 0
-    tasksPerPlayer.value.set(player.id, playerTasks + 1)
+    const playerTasks = tasksPerPlayer.value.get(targetPlayerId) || 0
+    tasksPerPlayer.value.set(targetPlayerId, playerTasks + 1)
 
     // Вторая часть: показываем результат
     isProcessingAI.value = false
+    const targetPlayer = allPlayers.value.find(p => p.id === targetPlayerId)
     aiResult.value = {
-      playerName: player.name,
+      playerName: targetPlayer?.name || 'Unknown',
       taskName: currentTask.name
     }
 
@@ -128,6 +135,88 @@ async function aiPlayerTurn(player: any) {
 
     await nextPlayerTurn()
   }
+}
+
+// Умная логика выбора игрока для задачи
+function selectBestPlayerForTask(task: Task, currentAIPlayer: any): string {
+  const playerSpecialization = getPlayerSpecialization(currentAIPlayer)
+  const maxTasks = gameStore.gameSettings?.actionsPerTurn || 5
+
+  // Проверяем, может ли AI игрок взять еще задачи
+  const currentAITasks = tasksPerPlayer.value.get(currentAIPlayer.id) || 0
+  const canAITakeMore = currentAITasks < maxTasks
+
+  // Если задача подходит AI игроку по специализации И у него есть место - берем себе
+  if (task.requiredSkill === playerSpecialization && canAITakeMore) {
+    return currentAIPlayer.id
+  }
+
+  // Если задача не подходит или у AI нет места - ищем кому её дать
+  const availablePlayers = allPlayers.value.filter(p => {
+    const playerTasks = tasksPerPlayer.value.get(p.id) || 0
+    return playerTasks < maxTasks
+  })
+
+  if (availablePlayers.length === 0) {
+    // Если все заполнены, но AI может взять - берем себе
+    if (canAITakeMore) {
+      return currentAIPlayer.id
+    }
+    // Если даже AI заполнен - берем себе (это не должно происходить в нормальной игре)
+    return currentAIPlayer.id
+  }
+
+  // Находим игрока, которому эта задача будет максимально невыгодна
+  let worstPlayer = availablePlayers[0]
+  let worstScore = calculateTaskDisadvantage(task, availablePlayers[0])
+
+  for (const player of availablePlayers) {
+    const disadvantage = calculateTaskDisadvantage(task, player)
+    if (disadvantage > worstScore) {
+      worstScore = disadvantage
+      worstPlayer = player
+    }
+  }
+
+  return worstPlayer.id
+}
+
+// Рассчитывает насколько невыгодна задача для игрока
+function calculateTaskDisadvantage(task: Task, player: any): number {
+  const playerSpecialization = getPlayerSpecialization(player)
+
+  // Базовый штраф за несоответствие специализации
+  let disadvantage = 0
+
+  if (task.requiredSkill !== playerSpecialization) {
+    disadvantage += 10 // Штраф за несоответствие специализации
+  }
+
+  // Дополнительный штраф за сложность задачи
+  disadvantage += task.complexity * 2
+
+  // Штраф за срочность (дедлайн)
+  if (task.deadline <= 2) {
+    disadvantage += 5 // Срочные задачи еще хуже
+  }
+
+  // Бонус за то, что игрок уже перегружен
+  const playerTasks = tasksPerPlayer.value.get(player.id) || 0
+  const maxTasks = gameStore.gameSettings?.actionsPerTurn || 5
+  const overloadRatio = playerTasks / maxTasks
+  disadvantage += overloadRatio * 15 // Чем больше перегружен, тем хуже
+
+  // Если это человек - небольшой штраф (AI предпочитает назначать другим AI)
+  if (player === gameStore.humanPlayerInterface) {
+    disadvantage += 5 // Уменьшили штраф с 20 до 5
+  }
+
+  // Если это другой AI - небольшой бонус (AI предпочитает назначать другим AI)
+  if (player !== gameStore.humanPlayerInterface) {
+    disadvantage -= 3 // Небольшой бонус для других AI
+  }
+
+  return disadvantage
 }
 
 function generateTasksForRound(): Task[] {
@@ -290,6 +379,16 @@ function onDrop(event: DragEvent, playerId: string) {
 
   if (!draggedTask.value || !isWaitingForPlayer.value) return
 
+  // Проверяем, может ли игрок взять еще задачи
+  const playerTasks = tasksPerPlayer.value.get(playerId) || 0
+  const maxTasks = gameStore.gameSettings?.actionsPerTurn || 5
+
+  if (playerTasks >= maxTasks) {
+    // Игрок уже заполнен, не можем назначить задачу
+    alert(`Игрок уже получил максимальное количество задач (${maxTasks})`)
+    return
+  }
+
   // Убираем класс подсветки
   const target = event.currentTarget as HTMLElement
   target.classList.remove('player-column--drag-over')
@@ -298,7 +397,6 @@ function onDrop(event: DragEvent, playerId: string) {
   distributedTasks.value.set(draggedTask.value.id, playerId)
 
   // Обновляем счетчик задач для игрока
-  const playerTasks = tasksPerPlayer.value.get(playerId) || 0
   tasksPerPlayer.value.set(playerId, playerTasks + 1)
 
   // Переходим к следующей задаче и игроку
@@ -316,10 +414,20 @@ function onTaskDoubleClick(task: Task) {
   if (!isWaitingForPlayer.value) return
 
   const humanPlayerId = gameStore.humanPlayerInterface!.id
+
+  // Проверяем, может ли человек взять еще задачи
+  const playerTasks = tasksPerPlayer.value.get(humanPlayerId) || 0
+  const maxTasks = gameStore.gameSettings?.actionsPerTurn || 5
+
+  if (playerTasks >= maxTasks) {
+    // Человек уже заполнен, не можем назначить задачу
+    alert(`Вы уже получили максимальное количество задач (${maxTasks})`)
+    return
+  }
+
   distributedTasks.value.set(task.id, humanPlayerId)
 
   // Обновляем счетчик задач для игрока
-  const playerTasks = tasksPerPlayer.value.get(humanPlayerId) || 0
   tasksPerPlayer.value.set(humanPlayerId, playerTasks + 1)
 
   // Переходим к следующей задаче и игроку
@@ -336,6 +444,27 @@ function getPhaseTitle(): string {
 
 function getPhaseDescription(): string {
   return 'Распределите задачи между игроками по очереди'
+}
+
+// Показать профиль игрока
+function showPlayerProfile(player: any) {
+  console.log('showPlayerProfile called with:', player)
+
+  // Получаем данные игрока из правильного источника
+  let playerData: any = null
+
+  if (player === gameStore.humanPlayerInterface) {
+    // Для человека берем данные из humanPlayer
+    playerData = gameStore.humanPlayer
+    console.log('Human player data:', playerData)
+  } else {
+    // Для AI берем данные из player.player
+    playerData = player.player
+    console.log('AI player data:', playerData)
+  }
+
+  console.log('Calling profileModal.show with:', playerData)
+  profileModal.value?.show(playerData)
 }
 
 function getPlayerSpecialization(player: any): string {
@@ -401,7 +530,14 @@ const isDistributionComplete = computed(() => {
 // Получить информацию о текущем ходе
 const currentTurnInfo = computed(() => {
   if (aiResult.value) {
-    return `${aiResult.value.playerName} назначил задачу "${aiResult.value.taskName}" себе!`
+    const currentAIPlayer = allPlayers.value[currentPlayerIndex.value]
+    const targetPlayer = allPlayers.value.find(p => p.name === aiResult.value?.playerName)
+
+    if (targetPlayer === currentAIPlayer) {
+      return `${aiResult.value.playerName} назначил задачу "${aiResult.value.taskName}" себе!`
+    } else {
+      return `${currentAIPlayer.name} назначил задачу "${aiResult.value.taskName}" игроку ${aiResult.value.playerName}!`
+    }
   } else if (isProcessingAI.value) {
     const player = allPlayers.value[currentPlayerIndex.value]
     return `${player.name} распределяет задачу...`
@@ -529,7 +665,8 @@ const currentTurnInfo = computed(() => {
               class="player-column"
               :class="{
                 'player-column--current': player === currentPlayer && isWaitingForPlayer,
-                'player-column--ai': player !== gameStore.humanPlayerInterface
+                'player-column--ai': player !== gameStore.humanPlayerInterface,
+                'player-column--filled': (tasksPerPlayer.get(player.id) || 0) >= (gameStore.gameSettings?.actionsPerTurn || 5)
               }"
               @dragover="onDragOver"
               @dragleave="onDragLeave"
@@ -537,7 +674,9 @@ const currentTurnInfo = computed(() => {
             >
               <div class="player-header">
                 <div class="player-info">
-                  <div class="player-name">{{ player.name }}</div>
+                  <div class="player-name clickable" @click="showPlayerProfile(player)">
+                    {{ player.name }}
+                  </div>
                   <div class="player-details">
                     <span class="player-type">
                       {{ player === gameStore.humanPlayerInterface ? 'Вы' : 'AI' }}
@@ -585,6 +724,9 @@ const currentTurnInfo = computed(() => {
       </div>
     </div>
   </div>
+
+  <!-- Profile Modal -->
+  <ProfileModal ref="profileModal" />
 </template>
 
 <style scoped>
@@ -972,6 +1114,19 @@ const currentTurnInfo = computed(() => {
   box-shadow: 0 0 0 2px var(--color-accent);
 }
 
+.player-column--filled {
+  opacity: 0.6;
+  background-color: var(--color-bg-tertiary);
+}
+
+.player-column--filled .player-header {
+  border-bottom-color: var(--color-border-muted);
+}
+
+.player-column--filled .task-count {
+  background-color: var(--color-text-tertiary);
+}
+
 .player-header {
   display: flex;
   justify-content: space-between;
@@ -991,6 +1146,15 @@ const currentTurnInfo = computed(() => {
   font-size: 16px;
   font-weight: 600;
   color: var(--color-text-primary);
+}
+
+.player-name.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.player-name.clickable:hover {
+  color: var(--color-accent);
 }
 
 .player-details {

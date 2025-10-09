@@ -4,17 +4,24 @@ import { useGameStore } from '@/stores/game'
 
 const gameStore = useGameStore()
 const isVisible = ref(false)
+const selectedPlayer = ref<any>(null)
 
 const humanPlayer = computed(() => gameStore.humanPlayer)
 const currentProject = computed(() => gameStore.currentProject)
 const gameSession = computed(() => gameStore.gameSession)
 
-function show() {
+// Показываем профиль конкретного игрока
+function show(player?: any) {
+  console.log('ProfileModal.show called with:', player)
+  selectedPlayer.value = player || humanPlayer.value
+  console.log('selectedPlayer set to:', selectedPlayer.value)
   isVisible.value = true
+  console.log('isVisible set to:', isVisible.value)
 }
 
 function hide() {
   isVisible.value = false
+  selectedPlayer.value = null
 }
 
 function closeOnBackdrop(event: MouseEvent) {
@@ -22,6 +29,12 @@ function closeOnBackdrop(event: MouseEvent) {
     hide()
   }
 }
+
+// Экспортируем методы для использования из родительского компонента
+defineExpose({
+  show,
+  hide
+})
 </script>
 
 <template>
@@ -37,28 +50,33 @@ function closeOnBackdrop(event: MouseEvent) {
       </div>
 
       <div class="modal-body">
-        <div v-if="humanPlayer" class="player-info">
+        <div v-if="selectedPlayer" class="player-info">
           <div class="player-basic">
-            <h3>{{ humanPlayer.name }}</h3>
-            <p class="player-specialization">{{ humanPlayer.specialization }}</p>
+            <h3>{{ selectedPlayer.name }}</h3>
+            <p class="player-specialization">{{ selectedPlayer.specialization }}</p>
+            <div class="player-type">
+              <span class="type-badge" :class="{ 'type-badge--human': selectedPlayer === humanPlayer, 'type-badge--ai': selectedPlayer !== humanPlayer }">
+                {{ selectedPlayer === humanPlayer ? 'Игрок' : 'AI' }}
+              </span>
+            </div>
           </div>
 
           <div class="player-stats">
             <div class="stat-item">
               <span class="stat-label">Уровень:</span>
-              <span class="stat-value">{{ humanPlayer.level }}</span>
+              <span class="stat-value">{{ selectedPlayer.level }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">Опыт:</span>
-              <span class="stat-value">{{ humanPlayer.experience }} XP</span>
+              <span class="stat-value">{{ selectedPlayer.experience }} XP</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">Деньги:</span>
-              <span class="stat-value">${{ humanPlayer.money }}</span>
+              <span class="stat-value">${{ selectedPlayer.money }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">Энтузиазм:</span>
-              <span class="stat-value">{{ humanPlayer.enthusiasm }}</span>
+              <span class="stat-value">{{ selectedPlayer.enthusiasm }}</span>
             </div>
           </div>
 
@@ -67,23 +85,23 @@ function closeOnBackdrop(event: MouseEvent) {
             <div class="skills-grid">
               <div class="skill-item">
                 <span class="skill-name">Frontend:</span>
-                <span class="skill-value">{{ humanPlayer.skills.frontend }}</span>
+                <span class="skill-value">{{ selectedPlayer.skills.frontend }}</span>
               </div>
               <div class="skill-item">
                 <span class="skill-name">Backend:</span>
-                <span class="skill-value">{{ humanPlayer.skills.backend }}</span>
+                <span class="skill-value">{{ selectedPlayer.skills.backend }}</span>
               </div>
               <div class="skill-item">
                 <span class="skill-name">Management:</span>
-                <span class="skill-value">{{ humanPlayer.skills.management }}</span>
+                <span class="skill-value">{{ selectedPlayer.skills.management }}</span>
               </div>
               <div class="skill-item">
                 <span class="skill-name">Tech Base:</span>
-                <span class="skill-value">{{ humanPlayer.skills.techBase }}</span>
+                <span class="skill-value">{{ selectedPlayer.skills.techBase }}</span>
               </div>
               <div class="skill-item">
                 <span class="skill-name">Soft Skills:</span>
-                <span class="skill-value">{{ humanPlayer.skills.softSkills }}</span>
+                <span class="skill-value">{{ selectedPlayer.skills.softSkills }}</span>
               </div>
             </div>
           </div>
@@ -127,6 +145,9 @@ function closeOnBackdrop(event: MouseEvent) {
               </div>
             </div>
           </div>
+        </div>
+        <div v-else class="no-player">
+          <p>Данные игрока не найдены</p>
         </div>
       </div>
     </div>
@@ -209,9 +230,32 @@ function closeOnBackdrop(event: MouseEvent) {
 }
 
 .player-specialization {
-  margin: 0;
+  margin: 0 0 8px 0;
   font-size: 16px;
   color: var(--color-text-secondary);
+}
+
+.player-type {
+  margin-bottom: 8px;
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.type-badge--human {
+  background-color: var(--color-accent);
+  color: white;
+}
+
+.type-badge--ai {
+  background-color: var(--color-text-tertiary);
+  color: var(--color-bg-primary);
 }
 
 .player-stats {
@@ -338,5 +382,11 @@ function closeOnBackdrop(event: MouseEvent) {
   text-align: right;
   font-size: 12px;
   color: var(--color-text-tertiary);
+}
+
+.no-player {
+  text-align: center;
+  padding: 40px;
+  color: var(--color-text-secondary);
 }
 </style>

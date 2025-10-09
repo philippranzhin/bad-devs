@@ -151,10 +151,21 @@ async function startGame(project: any) {
 
 function createAIPlayers(): any[] {
   const aiNames = ['Алексей', 'Мария', 'Дмитрий']
-  const specializations: Array<'frontend' | 'backend' | 'management' | 'fullstack'> = ['frontend', 'backend', 'management']
+
+  // Получаем специализацию человека, чтобы избежать дублирования
+  const humanSpecialization = gameStore.humanPlayer?.specialization || 'frontend'
+
+  // Создаем список доступных специализаций (исключаем специализацию человека)
+  const availableSpecializations: Array<'frontend' | 'backend' | 'management' | 'fullstack'> =
+    ['frontend', 'backend', 'management', 'fullstack'].filter(spec => spec !== humanSpecialization)
+
+  // Перемешиваем специализации для случайного распределения
+  const shuffledSpecializations = [...availableSpecializations].sort(() => Math.random() - 0.5)
 
   return aiNames.map((name, index) => {
-    const specialization = specializations[index]
+    // Берем специализацию по кругу, чтобы обеспечить равное распределение
+    const specialization = shuffledSpecializations[index % shuffledSpecializations.length]
+
     const player = {
       name,
       specialization,
