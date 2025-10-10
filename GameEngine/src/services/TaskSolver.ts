@@ -110,37 +110,32 @@ export class TaskSolver {
   }
 
   private calculateProbability(task: Task, investment: Investment): number {
-    // Базовая вероятность без навыков зависит от уровня сложности
-    const difficultyMultiplier = this.settings.difficultyLevel / 10; // 0.0 - 1.0
-    const baseProbability = 0.03 + (0.1 * (1 - difficultyMultiplier)); // от 13% до 3%
-
     // Получаем вложенные очки по типам
-    const skillPoints = investment[task.requiredSkill] || 0;
+    const investedSkillPoints = investment[task.requiredSkill] || 0;
+    const requiredSkillPoints = task.complexity; // сложность = требуемые очки основного скилла
     const techBasePoints = investment.techBase || 0;
     const softSkillsPoints = investment.softSkills || 0;
     const enthusiasmPoints = investment.enthusiasm || 0;
 
-    // Рассчитываем вероятность на основе правил игры
-    let probability = baseProbability;
-
-    // Основной навык дает базовый буст
-    if (skillPoints > 0) {
-      probability += skillPoints * 0.2; // каждый очко основного навыка дает +20%
+    // Базовая вероятность = соотношение вложенных/требуемых очков основного скилла
+    let probability = 0;
+    if (requiredSkillPoints > 0) {
+      probability = investedSkillPoints / requiredSkillPoints;
     }
 
-    // Тех база дает дополнительный буст
+    // Техбаза дает сильный буст (почти как основной скилл)
     if (techBasePoints > 0) {
-      probability += techBasePoints * 0.15; // каждый очко тех базы дает +15%
+      probability += techBasePoints * 0.18; // почти как основной скилл
     }
 
-    // Софты дают минимальный буст
+    // Софтскиллы дают слабый буст
     if (softSkillsPoints > 0) {
-      probability += softSkillsPoints * 0.05; // каждый очко софтов дает +5%
+      probability += softSkillsPoints * 0.05;
     }
 
-    // Энтузиазм дает значительный буст
+    // Энтузиазм дает очень сильный буст
     if (enthusiasmPoints > 0) {
-      probability += enthusiasmPoints * 0.35; // каждый очко энтузиазма дает +35%
+      probability += enthusiasmPoints * 0.35;
     }
 
     // Ограничиваем максимальную вероятность

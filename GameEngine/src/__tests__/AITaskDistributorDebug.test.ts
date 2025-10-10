@@ -105,12 +105,12 @@ describe('AITaskDistributor - Debug Tests', () => {
   describe('Task Fit Score Analysis', () => {
     it('should calculate correct fit scores for all players and tasks', () => {
       const distributor = new AITaskDistributor(frontendPlayer, 'kind');
-      
+
       console.log('\n=== TASK FIT SCORES ===');
-      
+
       const tasks = [frontendTask, backendTask, managementTask, fullstackTask];
       const players = [frontendPlayer, backendPlayer, managementPlayer, fullstackPlayer];
-      
+
       tasks.forEach(task => {
         console.log(`\nTask: ${task.name} (${task.requiredSkill}, complexity: ${task.complexity})`);
         players.forEach(player => {
@@ -126,9 +126,9 @@ describe('AITaskDistributor - Debug Tests', () => {
   describe('Task Selection Analysis', () => {
     it('should show which task each bot would choose', () => {
       const availableTasks = [frontendTask, backendTask, managementTask, fullstackTask];
-      
+
       console.log('\n=== TASK SELECTION BY BOTS ===');
-      
+
       allPlayers.forEach(player => {
         const distributor = new AITaskDistributor(player, 'kind');
         const selectedTask = (distributor as any).selectBestTaskForPlayer(
@@ -146,9 +146,9 @@ describe('AITaskDistributor - Debug Tests', () => {
   describe('Kind Bot Distribution Analysis', () => {
     it('should show how kind bots distribute tasks', async () => {
       const availableTasks = [frontendTask, backendTask, managementTask, fullstackTask];
-      
+
       console.log('\n=== KIND BOT DISTRIBUTION ===');
-      
+
       for (const player of allPlayers) {
         const distributor = new AITaskDistributor(player, 'kind');
         const choice = await distributor.selectTaskAssignment(
@@ -157,10 +157,10 @@ describe('AITaskDistributor - Debug Tests', () => {
           allPlayers,
           undefined
         );
-        
+
         const selectedTask = availableTasks.find(t => t.id === choice.taskId);
         const assignedToPlayer = allPlayers.find(p => p.id === choice.assignedTo);
-        
+
         console.log(`${player.name} (${(player as any).player.specialization})`);
         console.log(`  Выбирает задачу: ${selectedTask?.name} (${selectedTask?.requiredSkill})`);
         console.log(`  Назначает игроку: ${assignedToPlayer?.name} (${(assignedToPlayer as any).player.specialization})`);
@@ -172,9 +172,9 @@ describe('AITaskDistributor - Debug Tests', () => {
   describe('Evil Bot Distribution Analysis', () => {
     it('should show how evil bots distribute tasks', async () => {
       const availableTasks = [frontendTask, backendTask, managementTask, fullstackTask];
-      
+
       console.log('\n=== EVIL BOT DISTRIBUTION ===');
-      
+
       for (const player of allPlayers) {
         const distributor = new AITaskDistributor(player, 'evil');
         const choice = await distributor.selectTaskAssignment(
@@ -183,10 +183,10 @@ describe('AITaskDistributor - Debug Tests', () => {
           allPlayers,
           undefined
         );
-        
+
         const selectedTask = availableTasks.find(t => t.id === choice.taskId);
         const assignedToPlayer = allPlayers.find(p => p.id === choice.assignedTo);
-        
+
         console.log(`${player.name} (${(player as any).player.specialization})`);
         console.log(`  Выбирает задачу: ${selectedTask?.name} (${selectedTask?.requiredSkill})`);
         console.log(`  Назначает игроку: ${assignedToPlayer?.name} (${(assignedToPlayer as any).player.specialization})`);
@@ -199,13 +199,13 @@ describe('AITaskDistributor - Debug Tests', () => {
     it('should show who is best and worst for each task', () => {
       const distributor = new AITaskDistributor(frontendPlayer, 'kind');
       const tasks = [frontendTask, backendTask, managementTask, fullstackTask];
-      
+
       console.log('\n=== BEST/WORST PLAYERS FOR TASKS ===');
-      
+
       tasks.forEach(task => {
         const bestPlayer = (distributor as any).findBestPlayerForTask(task, allPlayers);
         const worstPlayer = (distributor as any).findWorstPlayerForTask(task, allPlayers);
-        
+
         console.log(`\nTask: ${task.name} (${task.requiredSkill})`);
         console.log(`  Лучший игрок: ${bestPlayer.name} (${(bestPlayer as any).player.specialization})`);
         console.log(`  Худший игрок: ${worstPlayer.name} (${(worstPlayer as any).player.specialization})`);
@@ -219,13 +219,13 @@ describe('AITaskDistributor - Debug Tests', () => {
       const humanPlayer = fullstackPlayer; // Человек играет за fullstack
       const aiPlayers = [frontendPlayer, backendPlayer, managementPlayer];
       const availableTasks = [frontendTask, backendTask, managementTask];
-      
+
       console.log('\n=== REAL SCENARIO TEST ===');
       console.log(`Человек: ${humanPlayer.name} (${(humanPlayer as any).player.specialization})`);
       console.log('AI игроки:', aiPlayers.map(p => `${p.name} (${(p as any).player.specialization})`).join(', '));
       console.log('Доступные задачи:', availableTasks.map(t => `${t.name} (${t.requiredSkill})`).join(', '));
       console.log('');
-      
+
       for (const aiPlayer of aiPlayers) {
         // Тестируем доброго бота
         const kindDistributor = new AITaskDistributor(aiPlayer, 'kind');
@@ -235,14 +235,14 @@ describe('AITaskDistributor - Debug Tests', () => {
           [humanPlayer, ...aiPlayers],
           undefined
         );
-        
+
         const selectedTask = availableTasks.find(t => t.id === kindChoice.taskId);
         const assignedToPlayer = [humanPlayer, ...aiPlayers].find(p => p.id === kindChoice.assignedTo);
-        
+
         console.log(`Добрый ${aiPlayer.name} (${(aiPlayer as any).player.specialization}):`);
         console.log(`  Выбирает: ${selectedTask?.name} (${selectedTask?.requiredSkill})`);
         console.log(`  Назначает: ${assignedToPlayer?.name} (${(assignedToPlayer as any).player.specialization})`);
-        
+
         // Проверяем, взял ли бот задачу себе
         if (kindChoice.assignedTo === aiPlayer.id) {
           console.log(`  ✅ Бот взял задачу себе`);
@@ -258,18 +258,18 @@ describe('AITaskDistributor - Debug Tests', () => {
     it('should show how task limits affect distribution', async () => {
       const availableTasks = [frontendTask, backendTask, managementTask];
       const taskDistribution = new TaskDistribution(1, availableTasks, 2); // Лимит 2 задачи на игрока
-      
+
       console.log('\n=== TASK LIMIT IMPACT TEST ===');
       console.log('Лимит задач: 2 на игрока');
       console.log('');
-      
+
       // Симулируем, что у frontendPlayer уже есть 2 задачи
       taskDistribution.assignTask(frontendTask.id, frontendPlayer.id, frontendPlayer.id);
       taskDistribution.assignTask(backendTask.id, frontendPlayer.id, frontendPlayer.id);
-      
+
       console.log(`У ${frontendPlayer.name} уже есть 2 задачи (лимит достигнут)`);
       console.log('');
-      
+
       for (const player of [backendPlayer, managementPlayer]) {
         const distributor = new AITaskDistributor(player, 'kind');
         const choice = await distributor.selectTaskAssignment(
@@ -278,10 +278,10 @@ describe('AITaskDistributor - Debug Tests', () => {
           allPlayers,
           taskDistribution
         );
-        
+
         const selectedTask = availableTasks.find(t => t.id === choice.taskId);
         const assignedToPlayer = allPlayers.find(p => p.id === choice.assignedTo);
-        
+
         console.log(`${player.name} (${(player as any).player.specialization}):`);
         console.log(`  Выбирает: ${selectedTask?.name} (${selectedTask?.requiredSkill})`);
         console.log(`  Назначает: ${assignedToPlayer?.name} (${(assignedToPlayer as any).player.specialization})`);
@@ -290,4 +290,3 @@ describe('AITaskDistributor - Debug Tests', () => {
     });
   });
 });
-
