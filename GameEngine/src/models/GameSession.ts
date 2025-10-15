@@ -1,5 +1,6 @@
 import { PlayerAction, PlayerActionRequest, PlayerInterface } from '../interfaces/PlayerInterface';
 import { AITaskDistributor } from '../players/AITaskDistributor';
+import { HumanPlayer } from '../players/HumanPlayer';
 import { TaskGenerator } from '../services/TaskGenerator';
 import { TaskSolver } from '../services/TaskSolver';
 import { BotPersonality } from '../types/BotPersonality';
@@ -16,6 +17,7 @@ export interface RoundResult {
   projectProgress: ProjectProgress;
   isProjectCompleted: boolean;
   nextRoundTasks: Task[];
+  currentRoundTasks: Task[]; // Добавляем задачи текущего раунда
 }
 
 export class GameSession {
@@ -153,7 +155,27 @@ export class GameSession {
       playerActions: results,
       projectProgress,
       isProjectCompleted: this.project.isProjectCompleted(),
-      nextRoundTasks: this.getUnresolvedTasks()
+      nextRoundTasks: this.getUnresolvedTasks(),
+      currentRoundTasks: [...round.tasks]
+    };
+  }
+
+  // 🎯 Получение результатов текущего раунда (для UI)
+  public getCurrentRoundResult(): RoundResult | null {
+    if (!this.currentRoundObj || !this.currentRoundObj.isCompleted) {
+      return null;
+    }
+
+    const results = this.currentRoundObj.actions;
+    const projectProgress = this.updateProjectProgress(results);
+
+    return {
+      roundNumber: this.currentRoundObj.roundNumber,
+      playerActions: results,
+      projectProgress,
+      isProjectCompleted: this.project.isProjectCompleted(),
+      nextRoundTasks: this.getUnresolvedTasks(),
+      currentRoundTasks: [...this.currentRoundObj.tasks]
     };
   }
 
@@ -458,6 +480,116 @@ export class GameSession {
     results.forEach(action => {
       this.currentRoundObj!.addPlayerAction(action);
     });
+  }
+
+  // Завершение раунда и получение результатов
+  public async completeRound(): Promise<RoundResult> {
+    if (!this.currentRoundObj) {
+      throw new Error('No active round');
+    }
+
+    // Завершаем раунд
+    this.currentRoundObj.completeRound();
+
+    // Получаем все действия раунда
+    const allActions = this.currentRoundObj.actions;
+
+    // Обновляем прогресс проекта
+    const projectProgress = this.updateProjectProgress(allActions);
+
+    // Уведомляем игроков о результатах
+    this.notifyPlayersRoundEnd(this.currentRoundObj, allActions);
+    this.notifyPlayersProjectProgress(projectProgress);
+
+    // Создаем результат раунда
+    const roundResult: RoundResult = {
+      roundNumber: this.currentRoundObj.roundNumber,
+      playerActions: allActions,
+      projectProgress,
+      isProjectCompleted: this.project.isProjectCompleted(),
+      nextRoundTasks: this.getUnresolvedTasks(),
+      currentRoundTasks: [...this.currentRoundObj.tasks] // Сохраняем задачи текущего раунда
+    };
+
+    // Переходим к следующему раунду
+    this.currentRound++;
+
+    return roundResult;
+  }
+
+  // Проверка готовности раунда к завершению
+  public isRoundReadyToComplete(): boolean {
+    if (!this.currentRoundObj) return false;
+
+    // Проверяем, что все игроки отправили свои действия
+    for (const player of this.playerInterfaces) {
+      const playerActions = this.currentRoundObj.getPlayerActions(player.id);
+      if (playerActions.length === 0) {
+        return false; // Игрок еще не отправил действия
+      }
+    }
+
+    return true;
+  }
+
+  // Автоматическая отправка действий для AI игроков
+  public async submitAIPlayerActions(): Promise<void> {
+    if (!this.currentRoundObj) return;
+
+    console.log('submitAIPlayerActions: Starting for', this.playerInterfaces.length, 'players');
+
+    for (const playerInterface of this.playerInterfaces) {
+      // Пропускаем человеческого игрока
+      if (playerInterface instanceof HumanPlayer) {
+        console.log('Skipping human player:', playerInterface.id);
+        continue;
+      }
+
+      console.log('Processing AI player:', playerInterface.id);
+
+      // Проверяем, не отправил ли уже AI игрок свои действия
+      const existingActions = this.currentRoundObj.getPlayerActions(playerInterface.id);
+      if (existingActions.length > 0) {
+        console.log('Player', playerInterface.id, 'already has', existingActions.length, 'actions');
+        continue;
+      }
+
+      // Получаем задачи игрока
+      const playerTasks = this.getPlayerTasks(playerInterface.id);
+      console.log('Player', playerInterface.id, 'has', playerTasks.length, 'tasks');
+      if (playerTasks.length === 0) {
+        console.log('Player', playerInterface.id, 'has no tasks, skipping');
+        continue;
+      }
+
+      // Получаем текущий энтузиазм игрока
+      const currentEnthusiasm = this.playerEnthusiasm.get(playerInterface.id) || 0;
+      console.log('Player', playerInterface.id, 'enthusiasm:', currentEnthusiasm);
+
+      try {
+        // Запрашиваем действия у AI игрока
+        console.log('Calling selectActions for', playerInterface.id);
+        const actions = await playerInterface.selectActions(
+          playerTasks,
+          this.settings.actionsPerTurn,
+          currentEnthusiasm
+        );
+        console.log('Player', playerInterface.id, 'selected', actions.length, 'actions');
+
+        // Отправляем действия
+        if (actions.length > 0) {
+          console.log('Submitting', actions.length, 'actions for', playerInterface.id);
+          await this.submitPlayerActions(playerInterface.id, actions);
+          console.log('Actions submitted for', playerInterface.id);
+        } else {
+          console.log('No actions to submit for', playerInterface.id);
+        }
+      } catch (error) {
+        console.error('Error processing AI player', playerInterface.id, ':', error);
+      }
+    }
+
+    console.log('submitAIPlayerActions: Completed');
   }
 
   // Валидация действий игрока

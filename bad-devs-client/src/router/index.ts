@@ -20,6 +20,11 @@ const router = createRouter({
       component: () => import('../views/GameSession.vue'),
     },
     {
+      path: '/round-results',
+      name: 'round-results',
+      component: () => import('../views/RoundResults.vue'),
+    },
+    {
       path: '/project-results',
       name: 'project-results',
       component: () => import('../views/ProjectResults.vue'),

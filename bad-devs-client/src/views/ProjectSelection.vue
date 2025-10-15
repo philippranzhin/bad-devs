@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
-import { Project, GameSession, AIPlayer, Player } from 'bad-devs-gameengine'
+import { AIPlayer, GameSession, Player, Project } from 'bad-devs-gameengine'
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const gameStore = useGameStore()
@@ -173,11 +173,10 @@ function createAIPlayers(): any[] {
     const aiPlayer = new AIPlayer(enginePlayer)
 
     // Добавляем информацию о личности для отображения
-    return {
-      ...aiPlayer,
+    return Object.assign(aiPlayer, {
       personality,
       personalityName: personality === 'kind' ? 'Добрый' : 'Злой'
-    }
+    })
   })
 }
 

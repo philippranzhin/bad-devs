@@ -4,7 +4,8 @@ import type {
     GameSettings,
     HumanPlayer,
     Player,
-    Project
+    Project,
+    RoundResult
 } from 'bad-devs-gameengine'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -15,7 +16,8 @@ export const useGameStore = defineStore('game', () => {
   const humanPlayer = ref<Player | null>(null)
   const currentProject = ref<Project | null>(null)
   const gameSession = ref<GameSession | null>(null)
-  const currentPhase = ref<'character' | 'project-selection' | 'game-session' | 'project-results'>('character')
+  const currentPhase = ref<'character' | 'project-selection' | 'game-session' | 'round-results' | 'project-results'>('character')
+  const roundResult = ref<RoundResult | null>(null)
 
   // Player interfaces
   const humanPlayerInterface = ref<HumanPlayer | null>(null)
@@ -56,6 +58,10 @@ export const useGameStore = defineStore('game', () => {
     aiPlayers.value = players
   }
 
+  function setRoundResult(result: RoundResult) {
+    roundResult.value = result
+  }
+
   function resetGame() {
     gameSettings.value = null
     humanPlayer.value = null
@@ -64,6 +70,7 @@ export const useGameStore = defineStore('game', () => {
     currentPhase.value = 'character'
     humanPlayerInterface.value = null
     aiPlayers.value = []
+    roundResult.value = null
   }
 
   return {
@@ -75,6 +82,7 @@ export const useGameStore = defineStore('game', () => {
     currentPhase,
     humanPlayerInterface,
     aiPlayers,
+    roundResult,
 
     // Computed
     isGameActive,
@@ -90,6 +98,7 @@ export const useGameStore = defineStore('game', () => {
     setCurrentPhase,
     setHumanPlayerInterface,
     setAIPlayers,
+    setRoundResult,
     resetGame
   }
 })
