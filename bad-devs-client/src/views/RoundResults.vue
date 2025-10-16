@@ -52,12 +52,32 @@ const playerActionsWithDetails = computed(() => {
 
   return roundResult.value.playerActions.map(action => {
     const player = allPlayers.value.find(p => p.id === action.playerId)
-    const task = roundResult.value?.currentRoundTasks.find(t => t.id === action.taskId)
+    
+    // Ищем задачу в currentRoundTasks
+    let task = roundResult.value?.currentRoundTasks.find(t => t.id === action.taskId)
+    
+    // Если не найдена, попробуем найти в nextRoundTasks (невыполненные задачи)
+    if (!task) {
+      task = roundResult.value?.nextRoundTasks.find(t => t.id === action.taskId)
+    }
+    
+    // Если все еще не найдена, попробуем найти через GameSession
+    if (!task && gameSession.value) {
+      const allTasks = gameSession.value.getAllRoundTasks?.() || []
+      task = allTasks.find(t => t.id === action.taskId)
+    }
 
     // Дополнительная отладка для каждой задачи
     if (!task) {
       console.warn(`❌ Task not found: ${action.taskId}`)
-      console.log('  Available task IDs:', roundResult.value?.currentRoundTasks?.map(t => t.id) || [])
+      console.log('  Available currentRoundTasks IDs:', roundResult.value?.currentRoundTasks?.map(t => t.id) || [])
+      console.log('  Available nextRoundTasks IDs:', roundResult.value?.nextRoundTasks?.map(t => t.id) || [])
+      if (gameSession.value?.getAllRoundTasks) {
+        const allTasks = gameSession.value.getAllRoundTasks()
+        console.log('  Available getAllRoundTasks IDs:', allTasks.map(t => t.id))
+      }
+    } else {
+      console.log(`✅ Task found: ${action.taskId} -> ${task.name}`)
     }
 
     return {
