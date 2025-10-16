@@ -23,7 +23,8 @@ const settingsForm = reactive({
   startingSkills: 10,
   enthusiasmPoints: 10,
   actionsPerTurn: 5,
-  difficultyLevel: 5
+  difficultyLevel: 5,
+  allowUnlimitedActions: false
 })
 
 function createCharacterAndStartGame() {
@@ -38,7 +39,8 @@ function createCharacterAndStartGame() {
     startingSkills: settingsForm.startingSkills,
     enthusiasmPoints: settingsForm.enthusiasmPoints,
     actionsPerTurn: settingsForm.actionsPerTurn,
-    difficultyLevel: settingsForm.difficultyLevel
+    difficultyLevel: settingsForm.difficultyLevel,
+    allowUnlimitedActions: settingsForm.allowUnlimitedActions
   })
 
   // Create Player
@@ -219,6 +221,20 @@ function getDifficultyText(level: number): string {
                     class="form-input"
                   />
                 </div>
+
+                <div class="form-group">
+                  <label class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      v-model="settingsForm.allowUnlimitedActions"
+                      class="checkbox-input"
+                    />
+                    <span class="checkbox-text">Разрешить неограниченные действия</span>
+                  </label>
+                  <p class="setting-description">
+                    Позволяет инвестировать навыки во все задачи игрока, игнорируя ограничение по количеству действий за ход
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -379,5 +395,33 @@ function getDifficultyText(level: number): string {
   text-align: center;
   border-top: 1px solid var(--color-border);
   padding-top: 24px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.checkbox-input {
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary);
+}
+
+.checkbox-text {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.setting-description {
+  margin: 8px 0 0 30px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
 }
 </style>
