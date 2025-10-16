@@ -549,7 +549,7 @@ export class GameSession {
     }
 
     // Убираем дубликаты (если невыполненная задача уже есть в текущем раунде)
-    const uniqueTasks = allTasks.filter((task, index, self) => 
+    const uniqueTasks = allTasks.filter((task, index, self) =>
       index === self.findIndex(t => t.id === task.id)
     );
 
@@ -642,7 +642,7 @@ export class GameSession {
 
     // Получаем все задачи раунда ПЕРЕД получением невыполненных задач
     const allRoundTasks = this.getAllRoundTasks();
-    
+
     // Создаем результат раунда
     const roundResult: RoundResult = {
       roundNumber: this.currentRoundObj.roundNumber,

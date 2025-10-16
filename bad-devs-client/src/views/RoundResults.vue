@@ -34,6 +34,11 @@ const totalActions = computed(() => {
   return roundResult.value.playerActions.length
 })
 
+const totalTasks = computed(() => {
+  if (!roundResult.value) return 0
+  return roundResult.value.currentRoundTasks?.length || 0
+})
+
 const successRate = computed(() => {
   if (totalActions.value === 0) return 0
   return Math.round((successCount.value / totalActions.value) * 100)
@@ -52,15 +57,15 @@ const playerActionsWithDetails = computed(() => {
 
   return roundResult.value.playerActions.map(action => {
     const player = allPlayers.value.find(p => p.id === action.playerId)
-    
+
     // Ищем задачу в currentRoundTasks
     let task = roundResult.value?.currentRoundTasks.find(t => t.id === action.taskId)
-    
+
     // Если не найдена, попробуем найти в nextRoundTasks (невыполненные задачи)
     if (!task) {
       task = roundResult.value?.nextRoundTasks.find(t => t.id === action.taskId)
     }
-    
+
     // Если все еще не найдена, попробуем найти через GameSession
     if (!task && gameSession.value) {
       const allTasks = gameSession.value.getAllRoundTasks?.() || []
@@ -199,7 +204,8 @@ onMounted(() => {
             <div class="summary-icon">🎯</div>
             <div class="summary-content">
               <div class="summary-title">Общая статистика</div>
-              <div class="summary-value">{{ successCount }} / {{ totalActions }}</div>
+              <div class="summary-value">{{ successCount }} / {{ totalActions }} действий</div>
+              <div class="summary-subtitle">{{ totalTasks }} задач в раунде</div>
               <div class="summary-rate">{{ successRate }}% успеха</div>
             </div>
           </div>
@@ -469,6 +475,12 @@ onMounted(() => {
   font-size: 24px;
   font-weight: 700;
   color: var(--color-success);
+  margin-bottom: 4px;
+}
+
+.summary-subtitle {
+  font-size: 14px;
+  color: var(--color-text-secondary);
   margin-bottom: 4px;
 }
 

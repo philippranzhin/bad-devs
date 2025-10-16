@@ -117,7 +117,7 @@ describe('Round Results Task Resolution Debug', () => {
 
     // Проверяем, что currentRoundTasks содержит все задачи
     expect(roundResult.currentRoundTasks.length).toBeGreaterThan(0);
-    
+
     // Проверяем, что все действия могут найти свои задачи
     for (const action of roundResult.playerActions) {
       const task = roundResult.currentRoundTasks.find(t => t.id === action.taskId);
