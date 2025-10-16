@@ -295,10 +295,10 @@ export class GameSession {
   // 🎯 Выполнение одного действия
   private executeSingleAction(action: PlayerActionRequest): PlayerAction {
     const playerInterface = this.playerInterfaces.find(p => p.id === action.playerId);
-    
+
     // Сначала ищем в задачах текущего раунда
     let task = this.currentRoundObj?.tasks.find((t: Task) => t.id === action.taskId);
-    
+
     // Если не найдена, ищем в невыполненных задачах игрока
     if (!task) {
       const unresolvedTasks = this.playerUnresolvedTasks.get(action.playerId) || [];
@@ -534,6 +534,28 @@ export class GameSession {
     return assignedTasks;
   }
 
+  // Получение всех задач раунда (включая невыполненные)
+  public getAllRoundTasks(): Task[] {
+    const allTasks: Task[] = [];
+
+    // Добавляем задачи текущего раунда
+    if (this.currentRoundObj) {
+      allTasks.push(...this.currentRoundObj.tasks);
+    }
+
+    // Добавляем невыполненные задачи всех игроков
+    for (const unresolvedTasks of this.playerUnresolvedTasks.values()) {
+      allTasks.push(...unresolvedTasks);
+    }
+
+    // Убираем дубликаты (если невыполненная задача уже есть в текущем раунде)
+    const uniqueTasks = allTasks.filter((task, index, self) => 
+      index === self.findIndex(t => t.id === task.id)
+    );
+
+    return uniqueTasks;
+  }
+
   // Расчет вероятности успеха для задачи
   public calculateTaskSuccessProbability(task: Task, playerId: string, investment: any): number {
     const player = this.players.find(p => p.name === playerId);
@@ -564,7 +586,7 @@ export class GameSession {
     results.forEach(action => {
       // Проверяем, является ли задача частью текущего раунда
       const isCurrentRoundTask = this.currentRoundObj!.tasks.some(task => task.id === action.taskId);
-      
+
       if (isCurrentRoundTask) {
         currentRoundActions.push(action);
       } else {
@@ -619,7 +641,7 @@ export class GameSession {
       projectProgress,
       isProjectCompleted: this.project.isProjectCompleted(),
       nextRoundTasks: this.getUnresolvedTasks(),
-      currentRoundTasks: [...this.currentRoundObj.tasks] // Сохраняем задачи текущего раунда
+      currentRoundTasks: this.getAllRoundTasks() // Сохраняем все задачи раунда (включая невыполненные)
     };
 
     // Переходим к следующему раунду
@@ -633,10 +655,10 @@ export class GameSession {
     // Сбрасываем состояние текущего раунда
     this.currentRoundObj = null;
     this.currentTaskDistribution = null;
-    
+
     // Очищаем действия по невыполненным задачам (они уже учтены в прогрессе)
     this.unresolvedTaskActions.clear();
-    
+
     // НЕ очищаем unresolvedTasks - они будут использованы в следующем раунде
   }
 
@@ -731,13 +753,13 @@ export class GameSession {
     actions.forEach(action => {
       // Сначала ищем в задачах текущего раунда
       let task = this.currentRoundObj!.tasks.find(t => t.id === action.taskId);
-      
+
       // Если не найдена, ищем в невыполненных задачах игрока
       if (!task) {
         const unresolvedTasks = this.playerUnresolvedTasks.get(playerId) || [];
         task = unresolvedTasks.find(t => t.id === action.taskId);
       }
-      
+
       if (!task) {
         throw new Error(`Task ${action.taskId} not found`);
       }
