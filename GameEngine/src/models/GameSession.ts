@@ -553,6 +553,12 @@ export class GameSession {
       index === self.findIndex(t => t.id === task.id)
     );
 
+    console.log('🎯 getAllRoundTasks:');
+    console.log('  Current round tasks:', this.currentRoundObj?.tasks.length || 0);
+    console.log('  Unresolved tasks by players:', Array.from(this.playerUnresolvedTasks.values()).flat().length);
+    console.log('  Total unique tasks:', uniqueTasks.length);
+    console.log('  Task IDs:', uniqueTasks.map(t => t.id));
+
     return uniqueTasks;
   }
 
@@ -634,6 +640,9 @@ export class GameSession {
     this.notifyPlayersRoundEnd(this.currentRoundObj, allActions);
     this.notifyPlayersProjectProgress(projectProgress);
 
+    // Получаем все задачи раунда ПЕРЕД получением невыполненных задач
+    const allRoundTasks = this.getAllRoundTasks();
+    
     // Создаем результат раунда
     const roundResult: RoundResult = {
       roundNumber: this.currentRoundObj.roundNumber,
@@ -641,7 +650,7 @@ export class GameSession {
       projectProgress,
       isProjectCompleted: this.project.isProjectCompleted(),
       nextRoundTasks: this.getUnresolvedTasks(),
-      currentRoundTasks: this.getAllRoundTasks() // Сохраняем все задачи раунда (включая невыполненные)
+      currentRoundTasks: allRoundTasks // Сохраняем все задачи раунда (включая невыполненные)
     };
 
     // Переходим к следующему раунду

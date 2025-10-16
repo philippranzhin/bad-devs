@@ -116,17 +116,17 @@ describe('Round Results Include Unresolved Tasks', () => {
 
     // Проверяем, что currentRoundTasks включает все задачи раунда
     expect(roundResult.currentRoundTasks.length).toBeGreaterThan(0);
-    
+
     // Проверяем, что невыполненные задачи есть в currentRoundTasks
     const unresolvedTaskIds = roundResult.nextRoundTasks.map(t => t.id);
     const currentRoundTaskIds = roundResult.currentRoundTasks.map(t => t.id);
-    
+
     // Все невыполненные задачи должны быть в currentRoundTasks
     for (const unresolvedTaskId of unresolvedTaskIds) {
       expect(currentRoundTaskIds).toContain(unresolvedTaskId);
     }
 
-    console.log('✅ Unresolved tasks in currentRoundTasks:', 
+    console.log('✅ Unresolved tasks in currentRoundTasks:',
       unresolvedTaskIds.filter(id => currentRoundTaskIds.includes(id)).length);
   });
 

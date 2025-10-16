@@ -43,9 +43,22 @@ const successRate = computed(() => {
 const playerActionsWithDetails = computed(() => {
   if (!roundResult.value) return []
 
+  // Отладочная информация
+  console.log('🔍 RoundResults Debug:')
+  console.log('  Player actions count:', roundResult.value.playerActions.length)
+  console.log('  Current round tasks count:', roundResult.value.currentRoundTasks?.length || 0)
+  console.log('  Current round task IDs:', roundResult.value.currentRoundTasks?.map(t => t.id) || [])
+  console.log('  Action task IDs:', roundResult.value.playerActions.map(a => a.taskId))
+
   return roundResult.value.playerActions.map(action => {
     const player = allPlayers.value.find(p => p.id === action.playerId)
     const task = roundResult.value?.currentRoundTasks.find(t => t.id === action.taskId)
+
+    // Дополнительная отладка для каждой задачи
+    if (!task) {
+      console.warn(`❌ Task not found: ${action.taskId}`)
+      console.log('  Available task IDs:', roundResult.value?.currentRoundTasks?.map(t => t.id) || [])
+    }
 
     return {
       ...action,
