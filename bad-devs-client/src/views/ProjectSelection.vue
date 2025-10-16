@@ -19,9 +19,9 @@ const mockProjects = [
     description: 'Создание новой социальной сети с уникальными функциями и современным дизайном',
     requiredLevel: 1,
     requirements: {
-      frontend: 15,
-      backend: 20,
-      management: 10
+      frontend: 30,
+      backend: 40,
+      management: 20
     },
     rewards: {
       baseSalary: 2000,
@@ -35,9 +35,9 @@ const mockProjects = [
     description: 'Корпоративная система для управления проектами и задачами команды',
     requiredLevel: 2,
     requirements: {
-      frontend: 12,
-      backend: 15,
-      management: 18
+      frontend: 25,
+      backend: 30,
+      management: 35
     },
     rewards: {
       baseSalary: 1500,
@@ -51,9 +51,9 @@ const mockProjects = [
     description: 'Кроссплатформенное мобильное приложение для iOS и Android',
     requiredLevel: 3,
     requirements: {
-      frontend: 25,
-      backend: 15,
-      management: 8
+      frontend: 50,
+      backend: 30,
+      management: 15
     },
     rewards: {
       baseSalary: 3000,
@@ -67,9 +67,9 @@ const mockProjects = [
     description: 'Система сбора и анализа больших данных с визуализацией',
     requiredLevel: 4,
     requirements: {
-      frontend: 20,
-      backend: 30,
-      management: 12
+      frontend: 40,
+      backend: 60,
+      management: 25
     },
     rewards: {
       baseSalary: 4000,

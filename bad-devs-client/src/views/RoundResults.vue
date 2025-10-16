@@ -104,7 +104,12 @@ function continueToNextRound() {
     // Проект завершен - переходим к результатам проекта
     router.push('/project-results')
   } else {
-    // Переходим к следующему раунду
+    // Подготавливаем GameEngine к следующему раунду
+    if (gameSession.value) {
+      gameSession.value.prepareNextRound()
+    }
+
+    // Переходим к следующему раунду (распределение задач)
     router.push('/game-session')
   }
 }

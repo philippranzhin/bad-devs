@@ -36,6 +36,8 @@ export class GameSession {
   private playerEnthusiasm: Map<string, number> = new Map();
   private taskDistributors: TaskDistributionInterface[] = [];
   private currentTaskDistribution: TaskDistribution | null = null;
+  private unresolvedTasks: Task[] = []; // Невыполненные задачи из предыдущих раундов
+  private playerUnresolvedTasks: Map<string, Task[]> = new Map(); // Невыполненные задачи по игрокам
 
   constructor(config: {
     id: string;
@@ -181,16 +183,16 @@ export class GameSession {
 
   // 🎯 Выполнение фазы распределения задач
   private async executeTaskDistribution(): Promise<TaskDistribution> {
-    // Генерируем пул задач для раунда
-    const taskPool = this.taskGenerator.generateTasksForRound(
+    // Генерируем только новые задачи для раунда
+    const newTasks = this.taskGenerator.generateTasksForRound(
       this.currentRound,
       this.playerInterfaces.length
     );
 
-    // Создаем фазу распределения
+    // Создаем фазу распределения только с новыми задачами
     const distribution = new TaskDistribution(
       this.currentRound,
-      taskPool,
+      newTasks,
       this.settings.actionsPerTurn
     );
 
@@ -376,10 +378,12 @@ export class GameSession {
       }
     }
 
-    // Обновляем проект
-    this.project.addProgress('frontend', progress.frontend);
-    this.project.addProgress('backend', progress.backend);
-    this.project.addProgress('management', progress.management);
+    // Обновляем проект только если он еще не завершен
+    if (!this.project.isCompleted) {
+      this.project.addProgress('frontend', progress.frontend);
+      this.project.addProgress('backend', progress.backend);
+      this.project.addProgress('management', progress.management);
+    }
 
     return progress;
   }
@@ -392,9 +396,64 @@ export class GameSession {
       .filter((action: PlayerAction) => action.success)
       .map((action: PlayerAction) => action.taskId);
 
-    return this.currentRoundObj.tasks.filter((task: Task) =>
+    const unresolvedTasks = this.currentRoundObj.tasks.filter((task: Task) =>
       !resolvedTaskIds.includes(task.id)
     );
+
+    console.log('🔍 getUnresolvedTasks:');
+    console.log('  Total tasks in round:', this.currentRoundObj.tasks.length);
+    console.log('  Resolved task IDs:', resolvedTaskIds);
+    console.log('  Unresolved tasks:', unresolvedTasks.length);
+    console.log('  Unresolved task IDs:', unresolvedTasks.map(t => t.id));
+
+    // Распределяем невыполненные задачи по игрокам
+    this.distributeUnresolvedTasksToPlayers(unresolvedTasks);
+
+    // Обновляем общий список невыполненных задач для следующего раунда
+    this.unresolvedTasks = unresolvedTasks;
+
+    return unresolvedTasks;
+  }
+
+  // Распределение невыполненных задач по игрокам
+  private distributeUnresolvedTasksToPlayers(unresolvedTasks: Task[]): void {
+    // Очищаем предыдущие невыполненные задачи
+    this.playerUnresolvedTasks.clear();
+
+    // Получаем назначения задач из текущего раунда
+    const taskAssignments = new Map<string, Task[]>();
+
+    if (this.currentRoundObj) {
+      // Создаем карту назначений задач по игрокам
+      for (const action of this.currentRoundObj.actions) {
+        const task = this.currentRoundObj.tasks.find(t => t.id === action.taskId);
+        if (task) {
+          if (!taskAssignments.has(action.playerId)) {
+            taskAssignments.set(action.playerId, []);
+          }
+          taskAssignments.get(action.playerId)!.push(task);
+        }
+      }
+    }
+
+    // Распределяем невыполненные задачи по игрокам
+    for (const unresolvedTask of unresolvedTasks) {
+      // Находим игрока, которому была назначена эта задача
+      for (const [playerId, playerTasks] of taskAssignments) {
+        if (playerTasks.some(task => task.id === unresolvedTask.id)) {
+          if (!this.playerUnresolvedTasks.has(playerId)) {
+            this.playerUnresolvedTasks.set(playerId, []);
+          }
+          this.playerUnresolvedTasks.get(playerId)!.push(unresolvedTask);
+          break;
+        }
+      }
+    }
+
+    console.log('📋 distributeUnresolvedTasksToPlayers:');
+    for (const [playerId, tasks] of this.playerUnresolvedTasks) {
+      console.log(`  ${playerId}: ${tasks.length} unresolved tasks`);
+    }
   }
 
   public isSessionFull(): boolean {
@@ -447,10 +506,23 @@ export class GameSession {
 
   // Получение задач, назначенных конкретному игроку
   public getPlayerTasks(playerId: string): Task[] {
+    const assignedTasks: Task[] = [];
+
+    // Получаем задачи, назначенные в текущем раунде
     if (this.currentTaskDistribution) {
-      return this.currentTaskDistribution.getPlayerTasks(playerId);
+      assignedTasks.push(...this.currentTaskDistribution.getPlayerTasks(playerId));
     }
-    return [];
+
+    // Добавляем невыполненные задачи из предыдущих раундов
+    const unresolvedTasks = this.playerUnresolvedTasks.get(playerId) || [];
+    assignedTasks.push(...unresolvedTasks);
+
+    console.log(`🎯 getPlayerTasks(${playerId}):`);
+    console.log(`  Assigned tasks: ${this.currentTaskDistribution?.getPlayerTasks(playerId).length || 0}`);
+    console.log(`  Unresolved tasks: ${unresolvedTasks.length}`);
+    console.log(`  Total tasks: ${assignedTasks.length}`);
+
+    return assignedTasks;
   }
 
   // Расчет вероятности успеха для задачи
@@ -515,6 +587,14 @@ export class GameSession {
     this.currentRound++;
 
     return roundResult;
+  }
+
+  // Подготовка к следующему раунду
+  public prepareNextRound(): void {
+    // Сбрасываем состояние текущего раунда
+    this.currentRoundObj = null;
+    this.currentTaskDistribution = null;
+    // НЕ очищаем unresolvedTasks - они будут использованы в следующем раунде
   }
 
   // Проверка готовности раунда к завершению
@@ -746,16 +826,22 @@ export class GameSession {
       return; // Уже инициализировано
     }
 
-    // Генерируем пул задач для раунда
-    const taskPool = this.taskGenerator.generateTasksForRound(
+    // Генерируем только новые задачи для раунда
+    const newTasks = this.taskGenerator.generateTasksForRound(
       this.currentRound,
       this.playerInterfaces.length
     );
 
-    // Создаем фазу распределения
+    console.log('🎯 initializeTaskDistribution:');
+    console.log('  Current round:', this.currentRound);
+    console.log('  New tasks generated:', newTasks.length);
+    console.log('  New task IDs:', newTasks.map(t => t.id));
+    console.log('  Note: Unresolved tasks will be added to players during task solving phase');
+
+    // Создаем фазу распределения только с новыми задачами
     this.currentTaskDistribution = new TaskDistribution(
       this.currentRound,
-      taskPool,
+      newTasks,
       this.settings.actionsPerTurn
     );
   }
