@@ -22,6 +22,7 @@ export class GameSettings {
   public readonly enthusiasmPoints: number;
   public readonly actionsPerTurn: number;
   public readonly difficultyLevel: number; // 0-10
+  public readonly allowUnlimitedActions: boolean; // Разрешить инвестировать во все задачи (игнорировать ограничение по количеству действий)
   public readonly defaultSkillSets: DefaultSkillSets;
   public readonly abilitySettings: AbilitySettings;
 
@@ -31,6 +32,7 @@ export class GameSettings {
     enthusiasmPoints?: number;
     actionsPerTurn?: number;
     difficultyLevel?: number;
+    allowUnlimitedActions?: boolean;
     defaultSkillSets?: Partial<DefaultSkillSets>;
     abilitySettings?: Partial<AbilitySettings>;
   } = {}) {
@@ -39,6 +41,7 @@ export class GameSettings {
     this.enthusiasmPoints = config.enthusiasmPoints ?? 10;
     this.actionsPerTurn = config.actionsPerTurn ?? 5;
     this.difficultyLevel = config.difficultyLevel ?? 5;
+    this.allowUnlimitedActions = config.allowUnlimitedActions ?? false;
 
     this.validateActionsPerTurn(this.actionsPerTurn);
 

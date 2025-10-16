@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import {
-  GameSettings,
-  Player,
-  HumanPlayer
+    GameSettings,
+    HumanPlayer,
+    Player
 } from 'bad-devs-gameengine'
+import { reactive } from 'vue'
+import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const gameStore = useGameStore()
