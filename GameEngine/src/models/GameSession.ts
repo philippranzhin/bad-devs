@@ -600,7 +600,7 @@ export class GameSession {
       }
     });
 
-    // Добавляем действия текущего раунда в раунд
+    // Добавляем только действия текущего раунда в раунд
     currentRoundActions.forEach(action => {
       this.currentRoundObj!.addPlayerAction(action);
     });
@@ -621,8 +621,8 @@ export class GameSession {
     // Завершаем раунд
     this.currentRoundObj.completeRound();
 
-    // Получаем все действия раунда
-    const allActions = this.currentRoundObj.actions;
+    // Получаем действия текущего раунда
+    const currentRoundActions = this.currentRoundObj.actions;
 
     // Добавляем действия по невыполненным задачам
     const allUnresolvedActions: PlayerAction[] = [];
@@ -630,14 +630,17 @@ export class GameSession {
       allUnresolvedActions.push(...actions);
     }
 
+    // Объединяем все действия для отображения в результатах
+    const allActionsForDisplay = [...currentRoundActions, ...allUnresolvedActions];
+
     // Объединяем все действия для расчета прогресса
-    const allActionsForProgress = [...allActions, ...allUnresolvedActions];
+    const allActionsForProgress = [...currentRoundActions, ...allUnresolvedActions];
 
     // Обновляем прогресс проекта
     const projectProgress = this.updateProjectProgress(allActionsForProgress);
 
-    // Уведомляем игроков о результатах
-    this.notifyPlayersRoundEnd(this.currentRoundObj, allActions);
+    // Уведомляем игроков о результатах (только действия текущего раунда)
+    this.notifyPlayersRoundEnd(this.currentRoundObj, currentRoundActions);
     this.notifyPlayersProjectProgress(projectProgress);
 
     // Получаем все задачи раунда ПЕРЕД получением невыполненных задач
@@ -646,7 +649,7 @@ export class GameSession {
     // Создаем результат раунда
     const roundResult: RoundResult = {
       roundNumber: this.currentRoundObj.roundNumber,
-      playerActions: allActions,
+      playerActions: allActionsForDisplay, // Возвращаем ВСЕ действия для отображения
       projectProgress,
       isProjectCompleted: this.project.isProjectCompleted(),
       nextRoundTasks: this.getUnresolvedTasks(),

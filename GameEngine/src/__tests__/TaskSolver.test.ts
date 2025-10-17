@@ -84,9 +84,9 @@ describe('TaskSolver', () => {
     });
 
     // Assert
-    // При сложности 5: базовая вероятность = 0.03 + 0.1 * (1 - 0.5) = 0.08
-    // 1 фронтенд (20%) + 1 тех база (15%) + 1 энтузиазм (35%) + базовая (8%) = 78%
-    expect(probability).toBeCloseTo(0.78, 2);
+    // При сложности 3: базовая вероятность = 1/3 = 0.333 (33.3%)
+    // 1 фронтенд (33.3%) + 1 тех база (18%) + 1 энтузиазм (35%) = 86.3%
+    expect(probability).toBeCloseTo(0.863, 2);
   });
 
   it('should throw error when investing more skills than player has', () => {

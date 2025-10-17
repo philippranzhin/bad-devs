@@ -328,8 +328,11 @@ describe('GameSession - Client Integration Tests', () => {
       const tasks = session.getCurrentRoundTasks();
       const task = tasks[0];
 
+      // Используем навык, соответствующий типу задачи, но не больше чем есть у игрока
+      const playerSkills = players[0].skills;
+      const skillAmount = playerSkills[task.requiredSkill as keyof typeof playerSkills] || 0;
       const investment = {
-        frontend: 3,
+        [task.requiredSkill]: Math.min(3, skillAmount),
         enthusiasm: 2
       };
 
@@ -343,7 +346,7 @@ describe('GameSession - Client Integration Tests', () => {
       const tasks = session.getCurrentRoundTasks();
       const task = tasks[0];
 
-      const investment = { frontend: 3 };
+      const investment = { [task.requiredSkill]: 1 };
 
       expect(() => {
         session.calculateTaskSuccessProbability(task, 'NonExistentPlayer', investment);
