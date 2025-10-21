@@ -187,7 +187,8 @@ export class GameSession {
     // Генерируем только новые задачи для раунда
     const newTasks = this.taskGenerator.generateTasksForRound(
       this.currentRound,
-      this.playerInterfaces.length
+      this.playerInterfaces.length,
+      this.project
     );
 
     // Создаем фазу распределения только с новыми задачами
@@ -508,7 +509,8 @@ export class GameSession {
     // Генерируем задачи для нового раунда
     const taskPool = this.taskGenerator.generateTasksForRound(
       this.currentRound,
-      this.playerInterfaces.length
+      this.playerInterfaces.length,
+      this.project
     );
     return taskPool;
   }
@@ -915,7 +917,8 @@ export class GameSession {
     // Генерируем только новые задачи для раунда
     const newTasks = this.taskGenerator.generateTasksForRound(
       this.currentRound,
-      this.playerInterfaces.length
+      this.playerInterfaces.length,
+      this.project
     );
 
     console.log('🎯 initializeTaskDistribution:');

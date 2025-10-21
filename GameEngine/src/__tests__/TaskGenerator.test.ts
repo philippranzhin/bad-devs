@@ -20,7 +20,7 @@ describe('TaskGenerator', () => {
       const playerCount = 3;
 
       // Act
-      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount);
+      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
 
       // Assert
       expect(tasks).toHaveLength(15); // 3 players × 5 actions per turn
@@ -32,7 +32,7 @@ describe('TaskGenerator', () => {
       const playerCount = 2;
 
       // Act
-      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount);
+      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
 
       // Assert
       const ids = tasks.map(task => task.id);
@@ -46,7 +46,7 @@ describe('TaskGenerator', () => {
       const playerCount = 1;
 
       // Act
-      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount);
+      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
 
       // Assert
       tasks.forEach(task => {
@@ -76,7 +76,7 @@ describe('TaskGenerator', () => {
       };
 
       // Act
-      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, config);
+      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined, config);
 
       // Assert
       tasks.forEach(task => {
@@ -94,7 +94,7 @@ describe('TaskGenerator', () => {
       const playerCount = 10; // Больше задач для лучшей статистики
 
       // Act
-      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount);
+      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
 
       // Assert
       const skillTypes = tasks.map(task => task.requiredSkill);
@@ -108,7 +108,7 @@ describe('TaskGenerator', () => {
       const playerCount = 20; // Много задач для проверки
 
       // Act
-      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount);
+      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
 
       // Assert
       tasks.forEach(task => {
@@ -145,7 +145,7 @@ describe('TaskGenerator', () => {
       const playerCount = 5;
 
       // Act
-      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount);
+      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
 
       // Assert
       tasks.forEach(task => {
@@ -164,7 +164,7 @@ describe('TaskGenerator', () => {
       const playerCount = 0;
 
       // Act
-      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount);
+      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
 
       // Assert
       expect(tasks).toHaveLength(0);
@@ -176,7 +176,7 @@ describe('TaskGenerator', () => {
       const playerCount = 1;
 
       // Act
-      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount);
+      const tasks = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
 
       // Assert
       expect(tasks).toHaveLength(5); // 1 player × 5 actions per turn
@@ -187,8 +187,8 @@ describe('TaskGenerator', () => {
       const playerCount = 1;
 
       // Act
-      const tasks1 = taskGenerator.generateTasksForRound(1, playerCount);
-      const tasks2 = taskGenerator.generateTasksForRound(5, playerCount);
+      const tasks1 = taskGenerator.generateTasksForRound(1, playerCount, undefined);
+      const tasks2 = taskGenerator.generateTasksForRound(5, playerCount, undefined);
 
       // Assert
       expect(tasks1).toHaveLength(5);
@@ -210,8 +210,8 @@ describe('TaskGenerator', () => {
       const playerCount = 1;
 
       // Act
-      const tasks1 = taskGenerator.generateTasksForRound(roundNumber, playerCount);
-      const tasks2 = taskGenerator.generateTasksForRound(roundNumber, playerCount);
+      const tasks1 = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
+      const tasks2 = taskGenerator.generateTasksForRound(roundNumber, playerCount, undefined);
 
       // Assert
       // Хотя бы одна задача должна отличаться (название, описание или параметры)
@@ -234,4 +234,3 @@ describe('TaskGenerator', () => {
     });
   });
 });
-

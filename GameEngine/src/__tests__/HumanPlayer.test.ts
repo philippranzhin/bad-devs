@@ -167,9 +167,6 @@ describe('HumanPlayer', () => {
 
       const actionsPromise = humanPlayer.selectActions(tasks, 1, 8);
 
-      // Wait a bit to ensure promise is pending
-      await new Promise(resolve => setTimeout(resolve, 10));
-
       const submittedActions = [
         {
           playerId: 'TestHuman',
