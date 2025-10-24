@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DeadlineIndicator from '@/components/DeadlineIndicator.vue'
 import ProfileModal from '@/components/ProfileModal.vue'
 import { useGameStore } from '@/stores/game'
 import type { PlayerActionRequest, Task } from 'bad-devs-gameengine'
@@ -839,6 +840,7 @@ const currentTurnInfo = computed(() => {
                     <span class="task-skill">{{ getSpecializationName(task.requiredSkill) }}</span>
                     <span class="task-complexity">Требует: {{ task.complexity }} {{ getSpecializationName(task.requiredSkill) }}</span>
                     <span class="task-reward">{{ task.experienceReward }} XP</span>
+                    <DeadlineIndicator :task="task" size="small" />
                   </div>
                 </div>
 

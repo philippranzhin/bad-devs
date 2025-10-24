@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import type { Task, PlayerActionRequest } from 'bad-devs-gameengine'
+import type { PlayerActionRequest, Task } from 'bad-devs-gameengine'
+import { computed, ref } from 'vue'
+import DeadlineIndicator from './DeadlineIndicator.vue'
 
 interface Props {
   tasks: Task[]
@@ -57,6 +58,7 @@ function calculateSuccessProbability(task: Task, investment: Record<string, numb
   return Math.round(baseProbability * 100)
 }
 
+
 async function submitActions() {
   if (!canSubmit.value) return
 
@@ -109,7 +111,7 @@ async function submitActions() {
           <h4 class="task-name">{{ task.name }}</h4>
           <div class="task-meta">
             <span class="task-complexity">Сложность: {{ task.complexity }}</span>
-            <span class="task-deadline">Дедлайн: {{ task.deadline }} раунд</span>
+            <DeadlineIndicator :task="task" size="small" />
           </div>
         </div>
 
@@ -127,7 +129,16 @@ async function submitActions() {
         </div>
 
         <div class="investment-section">
-          <h5 class="investment-title">Инвестиции в задачу:</h5>
+          <div class="investment-header">
+            <h5 class="investment-title">Инвестиции в задачу:</h5>
+            <DeadlineIndicator :task="task" size="small" />
+          </div>
+
+          <!-- Предупреждение для срочных задач -->
+          <div v-if="task.deadline === 1" class="deadline-warning-banner">
+            <span class="warning-icon">⚠️</span>
+            <span class="warning-text">Внимание! Дедлайн истекает в этом раунде. Если задача не будет выполнена, она будет потеряна.</span>
+          </div>
 
           <div class="investment-controls">
             <div class="investment-item">
@@ -163,6 +174,10 @@ async function submitActions() {
             <div class="summary-item">
               <span class="summary-label">Вероятность успеха:</span>
               <span class="summary-value">{{ calculateSuccessProbability(task, taskInvestments[task.id] || {}) }}%</span>
+            </div>
+            <div class="summary-item deadline-info">
+              <span class="summary-label">Статус дедлайна:</span>
+              <DeadlineIndicator :task="task" size="small" />
             </div>
           </div>
         </div>
@@ -254,11 +269,11 @@ async function submitActions() {
   color: var(--color-text-secondary);
 }
 
-.task-complexity,
-.task-deadline {
+.task-complexity {
   background-color: var(--color-bg-tertiary);
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--border-radius);
+  font-weight: 500;
 }
 
 .task-description {
@@ -301,11 +316,47 @@ async function submitActions() {
   padding-top: var(--spacing-md);
 }
 
+.investment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
 .investment-title {
-  margin: 0 0 var(--spacing-md) 0;
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: var(--color-text-primary);
+}
+
+.deadline-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-md);
+  animation: pulse-orange 2s infinite;
+}
+
+.warning-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.warning-text {
+  font-size: 14px;
+  color: #d97706;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+@keyframes pulse-orange {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
 }
 
 .investment-controls {
@@ -357,6 +408,10 @@ async function submitActions() {
   align-items: center;
 }
 
+.summary-item.deadline-info {
+  align-items: center;
+}
+
 .summary-label {
   font-size: 12px;
   color: var(--color-text-secondary);
@@ -394,6 +449,18 @@ async function submitActions() {
   .task-meta {
     flex-direction: row;
     gap: var(--spacing-sm);
+  }
+
+  .investment-header {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    align-items: flex-start;
+  }
+
+  .deadline-warning-banner {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--spacing-xs);
   }
 
   .investment-controls {

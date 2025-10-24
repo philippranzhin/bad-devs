@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import DeadlineIndicator from './DeadlineIndicator.vue'
 
 interface RoundResults {
   roundNumber: number
@@ -44,6 +45,7 @@ const progressChanges = computed(() => {
 
   return changes
 })
+
 </script>
 
 <template>
@@ -116,7 +118,33 @@ const progressChanges = computed(() => {
               </div>
             </div>
             <div class="action-task">
-              Задача: {{ action.taskId }}
+              <div class="task-info">
+                <span class="task-id">Задача: {{ action.taskId }}</span>
+                <span v-if="action.taskDeadline !== undefined" class="task-deadline-info">
+                  Дедлайн: {{ action.taskDeadline }} раунд{{ action.taskDeadline !== 1 ? 'ов' : '' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Unresolved Tasks -->
+      <div v-if="results.nextRoundTasks && results.nextRoundTasks.length > 0" class="unresolved-tasks">
+        <h4 class="unresolved-title">Невыполненные задачи (переносятся в следующий раунд)</h4>
+        <div class="unresolved-list">
+          <div
+            v-for="task in results.nextRoundTasks"
+            :key="task.id"
+            class="unresolved-task-item"
+          >
+            <div class="unresolved-task-header">
+              <span class="unresolved-task-name">{{ task.name }}</span>
+              <DeadlineIndicator :task="task" size="small" />
+            </div>
+            <div class="unresolved-task-details">
+              <span class="unresolved-task-skill">{{ task.requiredSkill }}</span>
+              <span class="unresolved-task-reward">{{ task.experienceReward }} XP</span>
             </div>
           </div>
         </div>
@@ -358,6 +386,74 @@ const progressChanges = computed(() => {
 .action-task {
   font-size: 14px;
   color: var(--color-text-secondary);
+}
+
+.task-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.task-id {
+  font-weight: 500;
+}
+
+.task-deadline-info {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+.unresolved-tasks {
+  background-color: var(--color-bg-secondary);
+  padding: var(--spacing-lg);
+  border-radius: var(--border-radius-lg);
+}
+
+.unresolved-title {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.unresolved-list {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.unresolved-task-item {
+  padding: var(--spacing-md);
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+}
+
+.unresolved-task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.unresolved-task-name {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.unresolved-task-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.unresolved-task-skill {
+  text-transform: capitalize;
+}
+
+.unresolved-task-reward {
+  font-weight: 500;
 }
 
 .project-status {

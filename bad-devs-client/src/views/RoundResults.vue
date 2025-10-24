@@ -34,14 +34,34 @@ const totalActions = computed(() => {
   return roundResult.value.playerActions.length
 })
 
+// Проверка, выполнена ли задача
+const isTaskCompleted = (taskId: string) => {
+  if (!roundResult.value) return false
+  return roundResult.value.playerActions.some(action =>
+    action.taskId === taskId && action.success
+  )
+}
+
+// Все задачи раунда с их статусом
+const allTasksWithStatus = computed(() => {
+  if (!roundResult.value?.currentRoundTasks) return []
+
+  return roundResult.value.currentRoundTasks.map(task => {
+    const action = roundResult.value?.playerActions.find(a => a.taskId === task.id)
+    const player = allPlayers.value.find(p => p.id === action?.playerId)
+
+    return {
+      ...task,
+      status: action ? (action.success ? 'completed' : 'failed') : 'no-action',
+      playerName: player?.name || 'Неизвестный игрок',
+      action: action
+    }
+  })
+})
+
 const totalTasks = computed(() => {
   if (!roundResult.value) return 0
   return roundResult.value.currentRoundTasks?.length || 0
-})
-
-const successRate = computed(() => {
-  if (totalActions.value === 0) return 0
-  return Math.round((successCount.value / totalActions.value) * 100)
 })
 
 // Действия игроков с деталями
@@ -283,6 +303,44 @@ onMounted(() => {
                       <span class="task-complexity">Сложность: {{ action.complexity }}</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- All Tasks Overview -->
+        <div class="all-tasks-section">
+          <h3 class="section-title">Все задачи раунда</h3>
+          <div class="tasks-grid">
+            <div
+              v-for="task in allTasksWithStatus"
+              :key="task.id"
+              class="task-card"
+              :class="{
+                'task-completed': task.status === 'completed',
+                'task-failed': task.status === 'failed',
+                'task-no-action': task.status === 'no-action'
+              }"
+            >
+              <div class="task-header">
+                <div class="task-name">{{ task.name }}</div>
+                <div class="task-status">
+                  <span v-if="task.status === 'completed'" class="status-completed">✅ Выполнена</span>
+                  <span v-else-if="task.status === 'failed'" class="status-failed">❌ Не выполнена</span>
+                  <span v-else class="status-no-action">⏳ Без действий</span>
+                </div>
+              </div>
+              <div class="task-description">{{ task.description }}</div>
+              <div class="task-meta">
+                <div class="task-info">
+                  <span class="task-skill">{{ task.requiredSkill }}</span>
+                  <span class="task-complexity">Сложность: {{ task.complexity }}</span>
+                </div>
+                <div v-if="task.action" class="task-player">
+                  <span class="player-name">{{ task.playerName }}</span>
+                  <span v-if="task.action.success" class="success-indicator">Успех!</span>
+                  <span v-else class="failure-indicator">Неудача</span>
                 </div>
               </div>
             </div>
@@ -822,6 +880,129 @@ onMounted(() => {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* All Tasks Section */
+.all-tasks-section {
+  margin-top: 32px;
+}
+
+.tasks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.task-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.task-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.task-card.task-completed {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.task-card.task-failed {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.task-card.task-no-action {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.task-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.task-status {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-completed {
+  color: #10b981;
+}
+
+.status-failed {
+  color: #ef4444;
+}
+
+.status-no-action {
+  color: #f59e0b;
+}
+
+.task-description {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+
+.task-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.task-info {
+  display: flex;
+  gap: 8px;
+}
+
+.task-skill {
+  background: var(--color-accent);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.task-complexity {
+  color: var(--color-text-secondary);
+}
+
+.task-player {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-name {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.success-indicator {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.failure-indicator {
+  color: #ef4444;
+  font-weight: 500;
 }
 
 /* Responsive */
