@@ -2,7 +2,6 @@ import { GameSession } from '../models/GameSession';
 import { GameSettings } from '../models/GameSettings';
 import { Player } from '../models/Player';
 import { Project } from '../models/Project';
-import { Task } from '../models/Task';
 import { AIPlayer } from '../players/AIPlayer';
 import { HumanPlayer } from '../players/HumanPlayer';
 
@@ -114,7 +113,7 @@ describe('RoundResult with currentRoundTasks', () => {
     // Получаем задачи раунда из currentRoundObj
     const roundTasks = gameSession.getCurrentRoundTasks();
     expect(roundTasks.length).toBeGreaterThan(0);
-    
+
     // Получаем задачи из currentRoundObj для сравнения
     const currentRoundObjTasks = gameSession['currentRoundObj']?.tasks || [];
 
@@ -132,7 +131,7 @@ describe('RoundResult with currentRoundTasks', () => {
         techBase: 1,
         enthusiasm: 1
       };
-      
+
       // Добавляем основной навык в зависимости от типа задачи
       if (task.requiredSkill === 'frontend') {
         investment.frontend = Math.min(3, humanPlayerData.skills.frontend);
@@ -155,7 +154,7 @@ describe('RoundResult with currentRoundTasks', () => {
         techBase: 1,
         enthusiasm: 1
       };
-      
+
       // Добавляем основной навык в зависимости от типа задачи
       if (task.requiredSkill === 'frontend') {
         investment.frontend = Math.min(3, aiPlayerData.skills.frontend);
@@ -195,7 +194,7 @@ describe('RoundResult with currentRoundTasks', () => {
     // Проверяем, что все задачи из раунда присутствуют в currentRoundTasks
     console.log('CurrentRoundObj tasks:', currentRoundObjTasks.map(t => ({ id: t.id, name: t.name })));
     console.log('Current round tasks:', roundResult.currentRoundTasks.map(t => ({ id: t.id, name: t.name })));
-    
+
     for (const task of currentRoundObjTasks) {
       const foundTask = roundResult.currentRoundTasks.find(t => t.id === task.id);
       expect(foundTask).toBeDefined();
@@ -229,7 +228,7 @@ describe('RoundResult with currentRoundTasks', () => {
 
     // Получаем задачи раунда
     const roundTasks = gameSession.getCurrentRoundTasks();
-    
+
     // Получаем задачи из currentRoundObj для сравнения
     const currentRoundObjTasks = gameSession['currentRoundObj']?.tasks || [];
 
@@ -242,7 +241,7 @@ describe('RoundResult with currentRoundTasks', () => {
         techBase: 1,
         enthusiasm: 1
       };
-      
+
       // Добавляем основной навык в зависимости от типа задачи
       if (task.requiredSkill === 'frontend') {
         investment.frontend = Math.min(3, humanPlayerData.skills.frontend);
@@ -265,10 +264,7 @@ describe('RoundResult with currentRoundTasks', () => {
     }
 
     // Завершаем раунд
-    await gameSession.completeRound();
-
-    // Получаем результат через getCurrentRoundResult
-    const roundResult = gameSession.getCurrentRoundResult();
+    const roundResult = await gameSession.completeRound();
 
     // Проверяем, что результат содержит currentRoundTasks
     expect(roundResult).toBeDefined();
@@ -294,7 +290,7 @@ describe('RoundResult with currentRoundTasks', () => {
 
     // Получаем задачи раунда
     const roundTasks = gameSession.getCurrentRoundTasks();
-    
+
     // Получаем задачи из currentRoundObj для сравнения
     const currentRoundObjTasks = gameSession['currentRoundObj']?.tasks || [];
 
@@ -307,7 +303,7 @@ describe('RoundResult with currentRoundTasks', () => {
         techBase: 1,
         enthusiasm: 1
       };
-      
+
       // Добавляем основной навык в зависимости от типа задачи
       if (task.requiredSkill === 'frontend') {
         investment.frontend = Math.min(3, humanPlayerData.skills.frontend);

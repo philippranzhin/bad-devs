@@ -1,9 +1,9 @@
-import { Project } from '../models/Project';
 import { GameSession } from '../models/GameSession';
 import { GameSettings } from '../models/GameSettings';
 import { Player } from '../models/Player';
-import { HumanPlayer } from '../players/HumanPlayer';
+import { Project } from '../models/Project';
 import { AIPlayer } from '../players/AIPlayer';
+import { HumanPlayer } from '../players/HumanPlayer';
 import { TaskGenerator } from '../services/TaskGenerator';
 
 describe('Project Progress System', () => {
@@ -145,11 +145,11 @@ describe('Project Progress System', () => {
 
       // Assert - задачи могут быть по любому направлению, но с учетом приоритизации
       const skillTypes = tasks.map(task => task.requiredSkill);
-      
+
       // Проверяем, что есть задачи по всем направлениям (может быть неравномерно из-за приоритизации)
       const uniqueSkills = [...new Set(skillTypes)];
       expect(uniqueSkills.length).toBeGreaterThanOrEqual(2); // Минимум 2 направления
-      
+
       // Проверяем, что есть задачи по backend и management (они менее завершены)
       expect(skillTypes).toContain('backend');
       expect(skillTypes).toContain('management');
@@ -203,7 +203,7 @@ describe('Project Progress System', () => {
       // Arrange
       gameSession.initializeTaskDistribution();
       const tasks = gameSession.getCurrentRoundTasks();
-      
+
       // Назначаем задачи
       if (tasks.length > 0) {
         gameSession.assignTask(tasks[0].id, 'human', 'human');
@@ -220,7 +220,7 @@ describe('Project Progress System', () => {
         // Используем данные игрока из beforeEach
         const playerSkills = humanPlayerData.skills;
         const skillAmount = playerSkills[task.requiredSkill as keyof typeof playerSkills] || 0;
-        
+
         const actions = [{
           playerId: 'human',
           taskId: task.id,

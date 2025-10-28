@@ -11,6 +11,14 @@ import { Project, ProjectProgress } from './Project';
 import { Task } from './Task';
 import { TaskDistribution, TaskDistributionInterface } from './TaskDistribution';
 
+export interface ExpiredTaskPenalty {
+  playerId: string;
+  taskId: string;
+  taskComplexity: number;
+  avoided: boolean; // успешно избежал штраф
+  complexityDeducted: number; // сколько очков вычитается из вклада
+}
+
 export interface RoundResult {
   roundNumber: number;
   playerActions: PlayerAction[];
@@ -18,6 +26,8 @@ export interface RoundResult {
   isProjectCompleted: boolean;
   nextRoundTasks: Task[];
   currentRoundTasks: Task[]; // Добавляем задачи текущего раунда
+  expiredPenalties: ExpiredTaskPenalty[]; // Штрафы за просроченные задачи
+  playerContributions: Record<string, number>; // Вклады игроков (с учетом штрафов)
 }
 
 export class GameSession {
@@ -39,6 +49,7 @@ export class GameSession {
   private unresolvedTasks: Task[] = []; // Невыполненные задачи из предыдущих раундов
   private playerUnresolvedTasks: Map<string, Task[]> = new Map(); // Невыполненные задачи по игрокам
   private unresolvedTaskActions: Map<string, PlayerAction[]> = new Map(); // Действия по невыполненным задачам
+  private playerContributions: Map<string, number> = new Map(); // Вклады игроков в проект (с учетом штрафов)
 
   constructor(config: {
     id: string;
@@ -159,7 +170,9 @@ export class GameSession {
       projectProgress,
       isProjectCompleted: this.project.isProjectCompleted(),
       nextRoundTasks: this.getUnresolvedTasks(),
-      currentRoundTasks: [...round.tasks]
+      currentRoundTasks: [...round.tasks],
+      expiredPenalties: [],
+      playerContributions: {}
     };
   }
 
@@ -178,7 +191,9 @@ export class GameSession {
       projectProgress,
       isProjectCompleted: this.project.isProjectCompleted(),
       nextRoundTasks: this.getUnresolvedTasks(),
-      currentRoundTasks: [...this.currentRoundObj.tasks]
+      currentRoundTasks: this.getAllRoundTasks(),
+      expiredPenalties: [],
+      playerContributions: {}
     };
   }
 
@@ -398,6 +413,113 @@ export class GameSession {
     return progress;
   }
 
+  // ⚠️ Расчет штрафов за просроченные задачи
+  private calculateExpiredPenalties(tasks: Task[]): ExpiredTaskPenalty[] {
+    const penalties: ExpiredTaskPenalty[] = [];
+
+    console.log('[ExpiredPenalties] Checking tasks:', tasks.length);
+    console.log('[ExpiredPenalties] Tasks with deadlines:', tasks.map(t => ({ id: t.id, deadline: t.deadline })));
+
+    for (const task of tasks) {
+      // Штраф только для задач с deadline = 0 (уже просрочены после обработки дедлайнов)
+      if (task.deadline !== 0) {
+        continue;
+      }
+      
+      console.log('[ExpiredPenalties] Found expired task:', task.id, 'deadline:', task.deadline);
+
+      // Находим игрока, которому была назначена эта задача
+      const playerId = this.findTaskOwner(task.id);
+      if (!playerId) {
+        continue;
+      }
+
+      // Получаем оригинального игрока для проверки софтскиллов
+      const player = this.players.find(p => p.name === playerId);
+      if (!player) {
+        continue;
+      }
+
+      // Проверяем возможность избежать штрафа
+      const avoided = this.checkPenaltyAvoidance(player, task);
+
+      // Рассчитываем сумму вычета
+      const complexityDeducted = avoided ? 0 : task.complexity;
+
+      penalties.push({
+        playerId,
+        taskId: task.id,
+        taskComplexity: task.complexity,
+        avoided,
+        complexityDeducted
+      });
+    }
+
+    return penalties;
+  }
+
+  // 🎲 Проверка возможности избежать штрафа (базовая вероятность ~10%, увеличивается с софтскиллами)
+  private checkPenaltyAvoidance(player: Player, task: Task): boolean {
+    // Базовая вероятность избежания: 10%
+    const baseChance = 0.1;
+
+    // Увеличиваем шанс в зависимости от софтскиллов
+    // Каждый уровень софтскилла увеличивает шанс на 5%
+    const softSkillsBonus = player.skills.softSkills * 0.05;
+
+    // Финальная вероятность
+    const avoidanceChance = Math.min(0.9, baseChance + softSkillsBonus); // Максимум 90%
+
+    // Генерируем случайное число от 0 до 1
+    const roll = Math.random();
+
+    return roll < avoidanceChance;
+  }
+
+  // 👤 Поиск владельца задачи
+  private findTaskOwner(taskId: string): string | null {
+    if (!this.currentTaskDistribution) {
+      return null;
+    }
+
+    // Ищем в назначениях текущего раунда
+    for (const assignment of this.currentTaskDistribution.assignments) {
+      if (assignment.taskId === taskId) {
+        return assignment.assignedTo;
+      }
+    }
+
+    return null;
+  }
+
+  // 💰 Расчет вкладов игроков с учетом штрафов
+  private calculatePlayerContributions(
+    actions: PlayerAction[],
+    penalties: ExpiredTaskPenalty[]
+  ): Record<string, number> {
+    const contributions: Record<string, number> = {};
+
+    // Инициализируем вклады на основе действий игроков
+    for (const action of actions) {
+      if (!contributions[action.playerId]) {
+        contributions[action.playerId] = 0;
+      }
+
+      if (action.success) {
+        contributions[action.playerId] += action.pointsEarned || 0;
+      }
+    }
+
+    // Применяем штрафы
+    for (const penalty of penalties) {
+      if (!penalty.avoided) {
+        contributions[penalty.playerId] = (contributions[penalty.playerId] || 0) - penalty.complexityDeducted;
+      }
+    }
+
+    return contributions;
+  }
+
   // 🔍 Получение нерешенных задач
   private getUnresolvedTasks(): Task[] {
     if (!this.currentRoundObj) return [];
@@ -416,13 +538,44 @@ export class GameSession {
     console.log('  Unresolved tasks:', unresolvedTasks.length);
     console.log('  Unresolved task IDs:', unresolvedTasks.map(t => t.id));
 
+    // Обрабатываем дедлайны задач
+    const processedTasks = this.processTaskDeadlines(unresolvedTasks);
+
     // Распределяем невыполненные задачи по игрокам
-    this.distributeUnresolvedTasksToPlayers(unresolvedTasks);
+    this.distributeUnresolvedTasksToPlayers(processedTasks);
 
     // Обновляем общий список невыполненных задач для следующего раунда
-    this.unresolvedTasks = unresolvedTasks;
+    this.unresolvedTasks = processedTasks;
 
-    return unresolvedTasks;
+    return processedTasks;
+  }
+
+  // ⏰ Обработка дедлайнов задач
+  private processTaskDeadlines(tasks: Task[]): Task[] {
+    console.log('⏰ processTaskDeadlines:');
+    console.log('  Processing', tasks.length, 'tasks');
+
+    return tasks.map(task => {
+      const newDeadline = Math.max(0, task.deadline - 1);
+      const isExpired = newDeadline === 0;
+
+      console.log(`  Task ${task.id}: deadline ${task.deadline} -> ${newDeadline} (expired: ${isExpired})`);
+
+      // Создаем новую задачу с обновленным дедлайном
+      const updatedTask = new Task({
+        id: task.id,
+        name: task.name,
+        description: task.description,
+        requiredSkill: task.requiredSkill,
+        complexity: task.complexity,
+        deadline: newDeadline,
+        experienceReward: isExpired ? 0 : task.experienceReward, // Просроченные задачи дают 0 опыта
+        contributesToCommonGoal: task.contributesToCommonGoal,
+        commonGoalSkill: task.commonGoalSkill
+      });
+
+      return updatedTask;
+    });
   }
 
   // Распределение невыполненных задач по игрокам
@@ -433,21 +586,29 @@ export class GameSession {
     // Получаем назначения задач из текущего раунда
     const taskAssignments = new Map<string, Task[]>();
 
-    if (this.currentRoundObj) {
-      // Создаем карту назначений задач по игрокам
-      for (const action of this.currentRoundObj.actions) {
-        const task = this.currentRoundObj.tasks.find(t => t.id === action.taskId);
-        if (task) {
-          if (!taskAssignments.has(action.playerId)) {
-            taskAssignments.set(action.playerId, []);
-          }
-          taskAssignments.get(action.playerId)!.push(task);
+    if (this.currentTaskDistribution) {
+      // Создаем карту назначений задач по игрокам из TaskDistribution
+      for (const player of this.playerInterfaces) {
+        const playerTasks = this.currentTaskDistribution.getPlayerTasks(player.id);
+        if (playerTasks.length > 0) {
+          taskAssignments.set(player.id, playerTasks);
         }
       }
     }
 
-    // Распределяем невыполненные задачи по игрокам
+    console.log('📋 distributeUnresolvedTasksToPlayers:');
+    console.log('  Task assignments:', Array.from(taskAssignments.entries()).map(([playerId, tasks]) =>
+      `${playerId}: [${tasks.map(t => t.id).join(', ')}]`
+    ));
+
+    // Распределяем невыполненные задачи по игрокам (только не просроченные)
     for (const unresolvedTask of unresolvedTasks) {
+      // Просроченные задачи (deadline = 0) не переносим в следующий раунд
+      if (unresolvedTask.deadline === 0) {
+        console.log(`  Skipping expired task ${unresolvedTask.id} (deadline: ${unresolvedTask.deadline})`);
+        continue;
+      }
+
       // Находим игрока, которому была назначена эта задача
       for (const [playerId, playerTasks] of taskAssignments) {
         if (playerTasks.some(task => task.id === unresolvedTask.id)) {
@@ -455,6 +616,7 @@ export class GameSession {
             this.playerUnresolvedTasks.set(playerId, []);
           }
           this.playerUnresolvedTasks.get(playerId)!.push(unresolvedTask);
+          console.log(`  Carrying over task ${unresolvedTask.id} to player ${playerId} (deadline: ${unresolvedTask.deadline})`);
           break;
         }
       }
@@ -513,6 +675,11 @@ export class GameSession {
       this.project
     );
     return taskPool;
+  }
+
+  // Получение только перенесенных задач игрока (без новых задач текущего раунда)
+  public getPlayerUnresolvedTasks(playerId: string): Task[] {
+    return this.playerUnresolvedTasks.get(playerId) || [];
   }
 
   // Получение задач, назначенных конкретному игроку
@@ -648,18 +815,36 @@ export class GameSession {
     // Получаем все задачи раунда ПЕРЕД получением невыполненных задач
     const allRoundTasks = this.getAllRoundTasks();
 
+    // Получаем невыполненные задачи (это также обрабатывает дедлайны)
+    const unresolvedTasks = this.getUnresolvedTasks();
+
+    // Рассчитываем штрафы за просроченные задачи (deadline = 0)
+    // Используем unresolvedTasks, которые уже имеют deadline = 0 после processTaskDeadlines
+    const expiredPenalties = this.calculateExpiredPenalties(unresolvedTasks);
+    console.log('[ExpiredPenalties] Calculated penalties:', expiredPenalties);
+
+    // Применяем штрафы к вкладам игроков
+    const playerContributions = this.calculatePlayerContributions(allActionsForProgress, expiredPenalties);
+    console.log('[ExpiredPenalties] Player contributions:', playerContributions);
+
     // Создаем результат раунда
     const roundResult: RoundResult = {
       roundNumber: this.currentRoundObj.roundNumber,
       playerActions: allActionsForDisplay, // Возвращаем ВСЕ действия для отображения
       projectProgress,
       isProjectCompleted: this.project.isProjectCompleted(),
-      nextRoundTasks: this.getUnresolvedTasks(),
-      currentRoundTasks: allRoundTasks // Сохраняем все задачи раунда (включая невыполненные)
+      nextRoundTasks: unresolvedTasks,
+      currentRoundTasks: allRoundTasks, // Сохраняем все задачи раунда (включая невыполненные)
+      expiredPenalties,
+      playerContributions
     };
 
     // Переходим к следующему раунду
     this.currentRound++;
+
+    // Сбрасываем состояние текущего раунда
+    this.currentRoundObj = null;
+    this.currentTaskDistribution = null;
 
     return roundResult;
   }

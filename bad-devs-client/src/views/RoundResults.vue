@@ -23,6 +23,13 @@ const allPlayers = computed(() => gameStore.gameSession?.playerInterfaces || [])
 const roundResult = computed(() => props.roundResult || gameStore.roundResult)
 const hasResults = computed(() => roundResult.value !== null)
 
+// Логирование для отладки
+if (roundResult.value) {
+  console.log('[RoundResults] Round result:', roundResult.value)
+  console.log('[RoundResults] Expired penalties:', roundResult.value.expiredPenalties)
+  console.log('[RoundResults] Player contributions:', roundResult.value.playerContributions)
+}
+
 // Статистика успешности
 const successCount = computed(() => {
   if (!roundResult.value) return 0
@@ -142,6 +149,20 @@ const progressChanges = computed(() => {
   return changes
 })
 
+// Вклады игроков за раунд
+const playerContributions = computed(() => {
+  if (!roundResult.value?.playerContributions) return []
+
+  return Object.entries(roundResult.value.playerContributions).map(([playerId, contribution]) => {
+    const player = allPlayers.value.find(p => p.id === playerId)
+    return {
+      playerId,
+      playerName: player?.name || 'Неизвестный игрок',
+      contribution
+    }
+  })
+})
+
 // Общий прогресс проекта
 const projectProgressPercentage = computed(() => {
   if (!project.value) return 0
@@ -257,6 +278,23 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- Player Contributions -->
+        <div v-if="playerContributions.length > 0" class="contributions-section">
+          <h3 class="section-title">💼 Вклады игроков в проект</h3>
+          <div class="contributions-list">
+            <div
+              v-for="item in playerContributions"
+              :key="item.playerId"
+              class="contribution-item"
+            >
+              <span class="contribution-player">{{ item.playerName }}</span>
+              <span class="contribution-value" :class="{ 'positive': item.contribution > 0, 'negative': item.contribution < 0, 'zero': item.contribution === 0 }">
+                {{ item.contribution > 0 ? '+' : '' }}{{ item.contribution }}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <!-- Player Actions Details -->
         <div class="actions-details">
           <h3 class="section-title">Детали действий игроков</h3>
@@ -303,6 +341,40 @@ onMounted(() => {
                       <span class="task-complexity">Сложность: {{ action.complexity }}</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Expired Task Penalties -->
+        <div v-if="roundResult.expiredPenalties && roundResult.expiredPenalties.length > 0" class="penalties-section">
+          <h3 class="section-title penalties-title">⚠️ Штрафы за просроченные задачи</h3>
+          <div class="penalties-list">
+            <div
+              v-for="penalty in roundResult.expiredPenalties"
+              :key="penalty.taskId"
+              class="penalty-item"
+              :class="{ 'avoided': penalty.avoided }"
+            >
+              <div class="penalty-header">
+                <div class="penalty-player">
+                  <span class="penalty-label">Игрок:</span>
+                  <span class="penalty-player-name">{{ penalty.playerId }}</span>
+                </div>
+                <div class="penalty-result">
+                  <span v-if="penalty.avoided" class="penalty-avoided">🎲 Штраф избегнут!</span>
+                  <span v-else class="penalty-applied">❌ Штраф применен</span>
+                </div>
+              </div>
+              <div class="penalty-details">
+                <div class="penalty-complexity">
+                  <span class="penalty-label">Сложность задачи:</span>
+                  <span class="penalty-value">{{ penalty.taskComplexity }}</span>
+                </div>
+                <div class="penalty-deducted">
+                  <span class="penalty-label">Списано с вклада:</span>
+                  <span class="penalty-value negative">-{{ penalty.complexityDeducted }}</span>
                 </div>
               </div>
             </div>
@@ -615,6 +687,57 @@ onMounted(() => {
 
 .change-fill.zero {
   background-color: var(--color-text-tertiary);
+}
+
+/* Contributions Section */
+.contributions-section {
+  background-color: var(--color-bg-secondary);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+}
+
+.contributions-list {
+  display: grid;
+  gap: 12px;
+}
+
+.contribution-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.contribution-item:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.contribution-player {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.contribution-value {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.contribution-value.positive {
+  color: var(--color-success);
+}
+
+.contribution-value.negative {
+  color: var(--color-danger);
+}
+
+.contribution-value.zero {
+  color: var(--color-text-secondary);
 }
 
 /* Actions Details */
@@ -1005,6 +1128,101 @@ onMounted(() => {
   font-weight: 500;
 }
 
+/* Penalties Section */
+.penalties-section {
+  background-color: rgba(209, 36, 47, 0.05);
+  padding: 20px;
+  border-radius: 12px;
+  border: 2px solid var(--color-danger);
+}
+
+.penalties-title {
+  color: var(--color-danger);
+}
+
+.penalties-list {
+  display: grid;
+  gap: 12px;
+}
+
+.penalty-item {
+  padding: 16px;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-danger);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.penalty-item.avoided {
+  border-color: var(--color-success);
+  background-color: rgba(26, 127, 55, 0.05);
+}
+
+.penalty-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.penalty-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.penalty-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.penalty-player-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.penalty-result {
+  display: flex;
+  align-items: center;
+}
+
+.penalty-avoided {
+  color: var(--color-success);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.penalty-applied {
+  color: var(--color-danger);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.penalty-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.penalty-complexity,
+.penalty-deducted {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.penalty-value {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.penalty-value.negative {
+  color: var(--color-danger);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .page-header-content {
@@ -1041,6 +1259,16 @@ onMounted(() => {
 
   .btn {
     width: 100%;
+  }
+
+  .penalty-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .penalty-details {
+    grid-template-columns: 1fr;
   }
 }
 </style>

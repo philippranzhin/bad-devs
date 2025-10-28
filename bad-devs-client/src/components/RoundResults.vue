@@ -8,6 +8,14 @@ interface RoundResults {
   projectProgress: Record<string, number>
   isProjectCompleted: boolean
   nextRoundTasks: any[]
+  expiredPenalties?: Array<{
+    playerId: string
+    taskId: string
+    taskComplexity: number
+    avoided: boolean
+    complexityDeducted: number
+  }>
+  playerContributions?: Record<string, number>
 }
 
 interface Props {
@@ -44,6 +52,14 @@ const progressChanges = computed(() => {
   })
 
   return changes
+})
+
+const hasExpiredPenalties = computed(() => {
+  return props.results?.expiredPenalties && props.results.expiredPenalties.length > 0
+})
+
+const expiredPenalties = computed(() => {
+  return props.results?.expiredPenalties || []
 })
 
 </script>
@@ -145,6 +161,40 @@ const progressChanges = computed(() => {
             <div class="unresolved-task-details">
               <span class="unresolved-task-skill">{{ task.requiredSkill }}</span>
               <span class="unresolved-task-reward">{{ task.experienceReward }} XP</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expired Task Penalties -->
+      <div v-if="hasExpiredPenalties" class="penalties-section">
+        <h4 class="penalties-title">⚠️ Штрафы за просроченные задачи</h4>
+        <div class="penalties-list">
+          <div
+            v-for="penalty in expiredPenalties"
+            :key="penalty.taskId"
+            class="penalty-item"
+            :class="{ 'avoided': penalty.avoided }"
+          >
+            <div class="penalty-header">
+              <div class="penalty-player">
+                <span class="penalty-label">Игрок:</span>
+                <span class="penalty-player-name">{{ penalty.playerId }}</span>
+              </div>
+              <div class="penalty-result">
+                <span v-if="penalty.avoided" class="penalty-avoided">🎲 Штраф избегнут!</span>
+                <span v-else class="penalty-applied">❌ Штраф применен</span>
+              </div>
+            </div>
+            <div class="penalty-details">
+              <div class="penalty-complexity">
+                <span class="penalty-label">Сложность задачи:</span>
+                <span class="penalty-value">{{ penalty.taskComplexity }}</span>
+              </div>
+              <div class="penalty-deducted">
+                <span class="penalty-label">Списано с вклада:</span>
+                <span class="penalty-value negative">-{{ penalty.complexityDeducted }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -456,6 +506,102 @@ const progressChanges = computed(() => {
   font-weight: 500;
 }
 
+/* Penalties Section */
+.penalties-section {
+  background-color: rgba(209, 36, 47, 0.05);
+  padding: var(--spacing-lg);
+  border-radius: var(--border-radius-lg);
+  border: 2px solid var(--color-danger);
+}
+
+.penalties-title {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.penalties-list {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.penalty-item {
+  padding: var(--spacing-md);
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--border-radius);
+  transition: all 0.2s ease;
+}
+
+.penalty-item.avoided {
+  border-color: var(--color-success);
+  background-color: rgba(26, 127, 55, 0.05);
+}
+
+.penalty-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.penalty-player {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.penalty-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.penalty-player-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.penalty-result {
+  display: flex;
+  align-items: center;
+}
+
+.penalty-avoided {
+  color: var(--color-success);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.penalty-applied {
+  color: var(--color-danger);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.penalty-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-sm);
+  font-size: 13px;
+}
+
+.penalty-complexity,
+.penalty-deducted {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.penalty-value {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.penalty-value.negative {
+  color: var(--color-danger);
+}
+
 .project-status {
   text-align: center;
 }
@@ -512,6 +658,16 @@ const progressChanges = computed(() => {
     flex-direction: column;
     gap: var(--spacing-xs);
     align-items: flex-start;
+  }
+
+  .penalty-header {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    align-items: flex-start;
+  }
+
+  .penalty-details {
+    grid-template-columns: 1fr;
   }
 
   .status-completed,
